@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 import express from 'express';
-import { AppDataSource } from './data-source'; // Import the DataSource instance
+import { config } from './config';
+import { AppDataSource } from './data-source';
 import analysisRoutes from './routes/analysisRoutes';
 import defaultRoute from './routes/defaultRoute';
 import { taskWorker } from './workers/taskWorker';
@@ -15,8 +16,8 @@ AppDataSource.initialize()
     // Start the worker after successful DB connection
     taskWorker();
 
-    app.listen(3000, () => {
-      console.log('Server is running at http://localhost:3000');
+    app.listen(config.PORT, () => {
+      console.log(`Server is running at http://localhost:${config.PORT}`);
     });
   })
   .catch((error) => console.log(error));

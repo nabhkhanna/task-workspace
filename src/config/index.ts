@@ -5,6 +5,7 @@ const envSchema = z.object({
   PORT: z.coerce.number().default(3000),
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
   DB_PATH: z.string().default('data/database.sqlite'),
+  SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
 });
 
 const parsed = envSchema.safeParse(process.env);

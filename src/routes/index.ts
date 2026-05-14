@@ -1,2 +1,2 @@
-export { createAnalysisRoutes } from './analysisRoutes';
-export { createHealthRoute } from './healthRoute';
+export { default as analysisRoutes } from './analysisRoutes';
+export { default as healthRoute } from './healthRoute';

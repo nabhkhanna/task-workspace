@@ -13,10 +13,12 @@ export interface Repositories {
   resultRepository: ResultRepository;
 }
 
-export function createRepositories(dataSource: DataSource): Repositories {
-  return {
+export const repositories = {} as Repositories;
+
+export function initRepositories(dataSource: DataSource): void {
+  Object.assign(repositories, {
     taskRepository: new TaskRepository(dataSource),
     workflowRepository: new WorkflowRepository(dataSource),
     resultRepository: new ResultRepository(dataSource),
-  };
+  });
 }

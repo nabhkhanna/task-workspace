@@ -1,12 +1,12 @@
 import { setTimeout as sleep } from 'node:timers/promises';
 import { logger } from '../logger';
-import type { Repositories } from '../repositories';
+import { repositories } from '../repositories';
 import { TaskRunner } from './taskRunner';
 
 const POLL_INTERVAL_MS = 5_000;
 
-export async function taskWorker(signal: AbortSignal, repositories: Repositories): Promise<void> {
-  const taskRunner = new TaskRunner(repositories);
+export async function taskWorker(signal: AbortSignal): Promise<void> {
+  const taskRunner = new TaskRunner();
 
   while (!signal.aborted) {
     const task = await repositories.taskRepository.findNextQueued();

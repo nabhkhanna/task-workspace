@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    name: Lint & Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npx tsc --noEmit
+
+  migration-check:
+    name: Migration Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Run migrations
+        run: npm run migration:run
+      - name: Check for missing migrations
+        run: |
+          output=$(npm run migration:generate 2>&1 || true)
+          echo "$output"
+          if echo "$output" | grep -q "No changes in database schema were found"; then
+            echo "Migration check passed."
+          else
+            echo "ERROR: Entity changes detected without a corresponding migration."
+            exit 1
+          fi
+
+  # TODO: add test job once Vitest is set up
+  # test:
+  #   name: Test
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-node@v4
+  #       with:
+  #         node-version: 20
+  #         cache: npm
+  #     - run: npm ci
+  #     - run: npm test

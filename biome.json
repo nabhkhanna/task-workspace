@@ -7,7 +7,7 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["src/**", "!src/data"]
+    "includes": ["src/**", "!src/data", "migrations/**"]
   },
   "formatter": {
     "enabled": true,
@@ -59,6 +59,16 @@
         "rules": {
           "style": {
             "noProcessEnv": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["migrations/**"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "useAwait": "off"
           }
         }
       }

@@ -3,15 +3,19 @@ import { createApp } from './app';
 import { config } from './config';
 import { AppDataSource } from './data-source';
 import { logger } from './logger';
+import { createRepositories } from './repositories';
 import { taskWorker } from './workers';
+import { WorkflowFactory } from './workflows/WorkflowFactory';
 
 async function main(): Promise<void> {
   await AppDataSource.initialize();
 
-  const app = createApp();
+  const repositories = createRepositories(AppDataSource);
+  const workflowFactory = new WorkflowFactory(repositories);
+  const app = createApp({ workflowFactory });
   const abortController = new AbortController();
 
-  const workerPromise = taskWorker(abortController.signal).catch((error) => {
+  const workerPromise = taskWorker(abortController.signal, repositories).catch((error) => {
     logger.error({ err: error }, 'worker.crashed');
     process.exit(1);
   });

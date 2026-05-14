@@ -1,20 +1,15 @@
 import { setTimeout as sleep } from 'node:timers/promises';
-import { AppDataSource } from '../data-source';
-import { Task } from '../entities';
 import { logger } from '../logger';
+import type { Repositories } from '../repositories';
 import { TaskRunner } from './taskRunner';
 
 const POLL_INTERVAL_MS = 5_000;
 
-export async function taskWorker(signal: AbortSignal): Promise<void> {
-  const taskRepository = AppDataSource.getRepository(Task);
-  const taskRunner = new TaskRunner(taskRepository);
+export async function taskWorker(signal: AbortSignal, repositories: Repositories): Promise<void> {
+  const taskRunner = new TaskRunner(repositories);
 
   while (!signal.aborted) {
-    const task = await taskRepository.findOne({
-      where: { status: 'queued' },
-      relations: ['workflow'],
-    });
+    const task = await repositories.taskRepository.findNextQueued();
 
     if (task) {
       try {

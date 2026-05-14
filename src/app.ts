@@ -1,12 +1,17 @@
 import express, { type Express } from 'express';
 import { pinoHttp } from 'pino-http';
 import { logger } from './logger';
-import { analysisRoutes, healthRoute } from './routes';
+import { createAnalysisRoutes, createHealthRoute } from './routes';
+import type { WorkflowFactory } from './workflows/WorkflowFactory';
 
 const HTTP_SERVER_ERROR = 500;
 const HTTP_CLIENT_ERROR = 400;
 
-export function createApp(): Express {
+export interface AppDependencies {
+  workflowFactory: WorkflowFactory;
+}
+
+export function createApp(deps: AppDependencies): Express {
   const app = express();
 
   app.use(
@@ -45,8 +50,8 @@ export function createApp(): Express {
     }),
   );
   app.use(express.json());
-  app.use('/health', healthRoute);
-  app.use('/analysis', analysisRoutes);
+  app.use('/health', createHealthRoute());
+  app.use('/analysis', createAnalysisRoutes(deps.workflowFactory));
 
   return app;
 }

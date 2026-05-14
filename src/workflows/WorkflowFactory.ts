@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as yaml from 'js-yaml';
-import { DataSource } from 'typeorm';
 import { Task, Workflow } from '../entities';
+import type { Repositories } from '../repositories';
 
 interface WorkflowStep {
   taskType: string;
@@ -14,14 +14,11 @@ interface WorkflowDefinition {
 }
 
 export class WorkflowFactory {
-  constructor(private dataSource: DataSource) {}
+  constructor(private readonly repositories: Repositories) {}
 
   /**
-   * Creates a workflow by reading a YAML file and constructing the Workflow and Task entities.
-   * @param filePath - Path to the YAML file.
-   * @param clientId - Client identifier for the workflow.
-   * @param geoJson - The geoJson data string for tasks (customize as needed).
-   * @returns A promise that resolves to the created Workflow.
+   * Creates a workflow from a YAML definition, persists it, and queues
+   * the associated tasks.
    */
   async createWorkflowFromYAML(
     filePath: string,
@@ -30,14 +27,12 @@ export class WorkflowFactory {
   ): Promise<Workflow> {
     const fileContent = fs.readFileSync(filePath, 'utf8');
     const workflowDef = yaml.load(fileContent) as WorkflowDefinition;
-    const workflowRepository = this.dataSource.getRepository(Workflow);
-    const taskRepository = this.dataSource.getRepository(Task);
     const workflow = new Workflow();
 
     workflow.clientId = clientId;
     workflow.status = 'initial';
 
-    const savedWorkflow = await workflowRepository.save(workflow);
+    const savedWorkflow = await this.repositories.workflowRepository.save(workflow);
 
     const tasks: Task[] = workflowDef.steps.map((step) => {
       const task = new Task();
@@ -50,7 +45,7 @@ export class WorkflowFactory {
       return task;
     });
 
-    await taskRepository.save(tasks);
+    await this.repositories.taskRepository.saveAll(tasks);
 
     return savedWorkflow;
   }

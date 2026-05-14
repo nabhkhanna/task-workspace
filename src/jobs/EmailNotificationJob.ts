@@ -1,11 +1,12 @@
+import { logger } from '../logger';
 import { Task } from '../models/Task';
 import { Job } from './Job';
 
+const SIMULATED_SEND_DELAY_MS = 500;
+
 export class EmailNotificationJob implements Job {
   async run(task: Task): Promise<void> {
-    console.log(`Sending email notification for task ${task.taskId}...`);
-    // Perform notification work
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    console.log('Email sent!');
+    await new Promise((resolve) => setTimeout(resolve, SIMULATED_SEND_DELAY_MS));
+    logger.info({ taskId: task.taskId }, 'job.email.sent');
   }
 }

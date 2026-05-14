@@ -1,5 +1,6 @@
 import { Repository } from 'typeorm';
 import { getJobForTaskType } from '../jobs/JobFactory';
+import { logger } from '../logger';
 import { Result } from '../models/Result';
 import { Task } from '../models/Task';
 import { Workflow } from '../models/Workflow';
@@ -21,16 +22,18 @@ export class TaskRunner {
    * @throws If the job fails, it rethrows the error.
    */
   async run(task: Task): Promise<void> {
+    const taskLogger = logger.child({ taskId: task.taskId, taskType: task.taskType });
+
     task.status = TaskStatus.InProgress;
     task.progress = 'starting job...';
     await this.taskRepository.save(task);
     const job = getJobForTaskType(task.taskType);
 
     try {
-      console.log(`Starting job ${task.taskType} for task ${task.taskId}...`);
+      taskLogger.info('task.started');
       const resultRepository = this.taskRepository.manager.getRepository(Result);
       const taskResult = await job.run(task);
-      console.log(`Job ${task.taskType} for task ${task.taskId} completed successfully.`);
+      taskLogger.info('task.completed');
       const result = new Result();
       result.taskId = task.taskId ?? '';
       result.data = JSON.stringify(taskResult || {});
@@ -40,7 +43,7 @@ export class TaskRunner {
       task.progress = null;
       await this.taskRepository.save(task);
     } catch (error: unknown) {
-      console.error(`Error running job ${task.taskType} for task ${task.taskId}:`, error);
+      taskLogger.error({ err: error }, 'task.failed');
 
       task.status = TaskStatus.Failed;
       task.progress = null;

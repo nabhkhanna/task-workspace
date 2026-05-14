@@ -1,5 +1,6 @@
 import { setTimeout as sleep } from 'node:timers/promises';
 import { AppDataSource } from '../data-source';
+import { logger } from '../logger';
 import { Task } from '../models/Task';
 import { TaskRunner, TaskStatus } from './taskRunner';
 
@@ -19,8 +20,10 @@ export async function taskWorker(signal: AbortSignal): Promise<void> {
       try {
         await taskRunner.run(task);
       } catch (error) {
-        console.error('Task execution failed. Task status has already been updated by TaskRunner.');
-        console.error(error);
+        logger.error(
+          { err: error, taskId: task.taskId },
+          'worker.task_execution_failed_already_marked',
+        );
       }
     }
 

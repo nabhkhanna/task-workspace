@@ -1,17 +1,7 @@
 import { Repository } from 'typeorm';
-import { getJobForTaskType } from '../jobs/JobFactory';
+import { Result, Task, Workflow } from '../entities';
+import { getJobForTaskType } from '../jobs';
 import { logger } from '../logger';
-import { Result } from '../models/Result';
-import { Task } from '../models/Task';
-import { Workflow } from '../models/Workflow';
-import { WorkflowStatus } from '../workflows/WorkflowFactory';
-
-export enum TaskStatus {
-  Queued = 'queued',
-  InProgress = 'in_progress',
-  Completed = 'completed',
-  Failed = 'failed',
-}
 
 export class TaskRunner {
   constructor(private taskRepository: Repository<Task>) {}
@@ -24,7 +14,7 @@ export class TaskRunner {
   async run(task: Task): Promise<void> {
     const taskLogger = logger.child({ taskId: task.taskId, taskType: task.taskType });
 
-    task.status = TaskStatus.InProgress;
+    task.status = 'in_progress';
     task.progress = 'starting job...';
     await this.taskRepository.save(task);
     const job = getJobForTaskType(task.taskType);
@@ -36,16 +26,16 @@ export class TaskRunner {
       taskLogger.info('task.completed');
       const result = new Result();
       result.taskId = task.taskId ?? '';
-      result.data = JSON.stringify(taskResult || {});
+      result.data = JSON.stringify(taskResult ?? {});
       await resultRepository.save(result);
       task.resultId = result.resultId ?? '';
-      task.status = TaskStatus.Completed;
+      task.status = 'completed';
       task.progress = null;
       await this.taskRepository.save(task);
     } catch (error: unknown) {
       taskLogger.error({ err: error }, 'task.failed');
 
-      task.status = TaskStatus.Failed;
+      task.status = 'failed';
       task.progress = null;
       await this.taskRepository.save(task);
 
@@ -59,15 +49,15 @@ export class TaskRunner {
     });
 
     if (currentWorkflow) {
-      const allCompleted = currentWorkflow.tasks.every((t) => t.status === TaskStatus.Completed);
-      const anyFailed = currentWorkflow.tasks.some((t) => t.status === TaskStatus.Failed);
+      const allCompleted = currentWorkflow.tasks.every((t) => t.status === 'completed');
+      const anyFailed = currentWorkflow.tasks.some((t) => t.status === 'failed');
 
       if (anyFailed) {
-        currentWorkflow.status = WorkflowStatus.Failed;
+        currentWorkflow.status = 'failed';
       } else if (allCompleted) {
-        currentWorkflow.status = WorkflowStatus.Completed;
+        currentWorkflow.status = 'completed';
       } else {
-        currentWorkflow.status = WorkflowStatus.InProgress;
+        currentWorkflow.status = 'in_progress';
       }
 
       await workflowRepository.save(currentWorkflow);

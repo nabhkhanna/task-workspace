@@ -1,8 +1,8 @@
 import { setTimeout as sleep } from 'node:timers/promises';
 import { AppDataSource } from '../data-source';
+import { Task } from '../entities';
 import { logger } from '../logger';
-import { Task } from '../models/Task';
-import { TaskRunner, TaskStatus } from './taskRunner';
+import { TaskRunner } from './taskRunner';
 
 const POLL_INTERVAL_MS = 5_000;
 
@@ -12,7 +12,7 @@ export async function taskWorker(signal: AbortSignal): Promise<void> {
 
   while (!signal.aborted) {
     const task = await taskRepository.findOne({
-      where: { status: TaskStatus.Queued },
+      where: { status: 'queued' },
       relations: ['workflow'],
     });
 

@@ -1,8 +1,6 @@
 import { DataSource } from 'typeorm';
 import { config } from './config';
-import { Result } from './models/Result';
-import { Task } from './models/Task';
-import { Workflow } from './models/Workflow';
+import { Result, Task, Workflow } from './entities';
 
 export const AppDataSource = new DataSource({
   type: 'sqlite',

@@ -1,4 +1,5 @@
 node_modules/
+.DS_Store
 dist/
 coverage/
 data/database.sqlite
@@ -6,3 +7,5 @@ data/database.sqlite
 *.js.map
 .claude/
 .idea/
+CLAUDE.md
+docs/PHASES.md

@@ -9,5 +9,5 @@ export class Result {
   taskId!: string;
 
   @Column('text')
-  data!: string | null; // Could be JSON or any serialized format
+  data!: string | null;
 }

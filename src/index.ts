@@ -3,7 +3,7 @@ import { createApp } from './app';
 import { config } from './config';
 import { AppDataSource } from './data-source';
 import { logger } from './logger';
-import { taskWorker } from './workers/taskWorker';
+import { taskWorker } from './workers';
 
 async function main(): Promise<void> {
   await AppDataSource.initialize();

@@ -1,4 +1,4 @@
-import { Task } from '../models/Task';
+import { Task } from '../entities';
 
 export interface Job {
   run(task: Task): Promise<unknown>;

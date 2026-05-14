@@ -1,16 +1,7 @@
 import * as fs from 'node:fs';
 import * as yaml from 'js-yaml';
 import { DataSource } from 'typeorm';
-import { Task } from '../models/Task';
-import { Workflow } from '../models/Workflow';
-import { TaskStatus } from '../workers/taskRunner';
-
-export enum WorkflowStatus {
-  Initial = 'initial',
-  InProgress = 'in_progress',
-  Completed = 'completed',
-  Failed = 'failed',
-}
+import { Task, Workflow } from '../entities';
 
 interface WorkflowStep {
   taskType: string;
@@ -44,7 +35,7 @@ export class WorkflowFactory {
     const workflow = new Workflow();
 
     workflow.clientId = clientId;
-    workflow.status = WorkflowStatus.Initial;
+    workflow.status = 'initial';
 
     const savedWorkflow = await workflowRepository.save(workflow);
 
@@ -52,7 +43,7 @@ export class WorkflowFactory {
       const task = new Task();
       task.clientId = clientId;
       task.geoJson = geoJson;
-      task.status = TaskStatus.Queued;
+      task.status = 'queued';
       task.taskType = step.taskType;
       task.stepNumber = step.stepNumber;
       task.workflow = savedWorkflow;

@@ -1,8 +1,7 @@
 import express, { type Express } from 'express';
 import { pinoHttp } from 'pino-http';
 import { logger } from './logger';
-import analysisRoutes from './routes/analysisRoutes';
-import healthRoute from './routes/healthRoute';
+import { analysisRoutes, healthRoute } from './routes';
 
 const HTTP_SERVER_ERROR = 500;
 const HTTP_CLIENT_ERROR = 400;

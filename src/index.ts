@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { createApp } from './app';
 import { config } from './config';
 import { AppDataSource } from './data-source';
+import { logger } from './logger';
 import { taskWorker } from './workers/taskWorker';
 
 async function main(): Promise<void> {
@@ -11,12 +12,12 @@ async function main(): Promise<void> {
   const abortController = new AbortController();
 
   const workerPromise = taskWorker(abortController.signal).catch((error) => {
-    console.error('Task worker crashed:', error);
+    logger.error({ err: error }, 'worker.crashed');
     process.exit(1);
   });
 
   const server = app.listen(config.PORT, () => {
-    console.log(`Server is running at http://localhost:${config.PORT}`);
+    logger.info({ port: config.PORT }, 'server.started');
   });
 
   let shuttingDown = false;
@@ -26,16 +27,16 @@ async function main(): Promise<void> {
     }
     shuttingDown = true;
 
-    console.log(`Received ${signal}, shutting down gracefully...`);
+    logger.info({ signal }, 'shutdown.received');
 
     const forceExitTimer = setTimeout(() => {
-      console.error('Shutdown timeout exceeded, forcing exit');
+      logger.error('shutdown.timeout_exceeded');
       process.exit(1);
     }, config.SHUTDOWN_TIMEOUT_MS);
 
     server.close((err) => {
       if (err) {
-        console.error('Error while closing HTTP server:', err);
+        logger.error({ err }, 'shutdown.http_close_failed');
       }
     });
 
@@ -47,11 +48,11 @@ async function main(): Promise<void> {
         await AppDataSource.destroy();
       }
     } catch (err) {
-      console.error('Error while closing DataSource:', err);
+      logger.error({ err }, 'shutdown.datasource_close_failed');
     }
 
     clearTimeout(forceExitTimer);
-    console.log('Shutdown complete');
+    logger.info('shutdown.complete');
     process.exit(0);
   };
 
@@ -62,16 +63,16 @@ async function main(): Promise<void> {
     void shutdown('SIGINT');
   });
   process.on('unhandledRejection', (reason) => {
-    console.error('Unhandled promise rejection:', reason);
+    logger.error({ err: reason }, 'process.unhandled_rejection');
     void shutdown('unhandledRejection');
   });
   process.on('uncaughtException', (err) => {
-    console.error('Uncaught exception:', err);
+    logger.error({ err }, 'process.uncaught_exception');
     void shutdown('uncaughtException');
   });
 }
 
 main().catch((error) => {
-  console.error('Failed to start server:', error);
+  logger.error({ err: error }, 'server.startup_failed');
   process.exit(1);
 });

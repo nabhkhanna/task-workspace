@@ -7,7 +7,11 @@
     "lint:fix": "biome lint --write",
     "format": "biome check --linter-enabled=false",
     "format:fix": "biome check --linter-enabled=false --write",
-    "lint-staged": "lint-staged"
+    "lint-staged": "lint-staged",
+    "migration:generate": "typeorm-ts-node-commonjs migration:generate -d src/data-source.ts migrations/Migration",
+    "migration:run": "typeorm-ts-node-commonjs migration:run -d src/data-source.ts",
+    "migration:revert": "typeorm-ts-node-commonjs migration:revert -d src/data-source.ts",
+    "migration:show": "typeorm-ts-node-commonjs migration:show -d src/data-source.ts"
   },
   "dependencies": {
     "@turf/turf": "^7.1.0",

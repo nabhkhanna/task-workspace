@@ -7,8 +7,9 @@ import { Workflow } from './models/Workflow';
 export const AppDataSource = new DataSource({
   type: 'sqlite',
   database: config.DB_PATH,
-  dropSchema: true,
+  dropSchema: false,
   entities: [Task, Result, Workflow],
-  synchronize: true,
+  migrations: ['migrations/*.ts'],
+  synchronize: false,
   logging: false,
 });

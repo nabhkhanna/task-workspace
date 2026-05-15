@@ -1,4 +1,4 @@
-import { type TaskType } from '../entities';
+import { type TaskType } from '../../entities';
 import { DataAnalysisJob } from './DataAnalysisJob';
 import { EmailNotificationJob } from './EmailNotificationJob';
 import type { Job } from './Job';

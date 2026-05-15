@@ -1,5 +1,5 @@
-import { Task } from '../entities';
-import { logger } from '../logger';
+import { Task } from '../../entities';
+import { logger } from '../../logger';
 import { Job } from './Job';
 
 const SIMULATED_SEND_DELAY_MS = 500;

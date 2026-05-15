@@ -1,8 +1,8 @@
 import { Result, Task } from '../entities';
-import { getJob } from '../jobs';
 import { logger } from '../logger';
 import { repositories } from '../repositories';
 import { WorkflowService } from '../services';
+import { getJob } from './jobs';
 
 export class TaskRunner {
   private readonly workflowService = new WorkflowService();

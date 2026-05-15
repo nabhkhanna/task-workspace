@@ -1,8 +1,8 @@
 import booleanWithin from '@turf/boolean-within';
 import { Feature, Polygon } from 'geojson';
-import countryMapping from '../data/world_data.json';
-import { Task } from '../entities';
-import { logger } from '../logger';
+import countryMapping from '../../data/world_data.json';
+import { Task } from '../../entities';
+import { logger } from '../../logger';
 import { Job } from './Job';
 
 export class DataAnalysisJob implements Job {

@@ -18,7 +18,7 @@ export class TaskRunner {
 
     try {
       taskLogger.info('task.started');
-      const output = await job.run(task);
+      const output = await job(task);
       taskLogger.info('task.completed');
       task.output = output;
       task.status = 'completed';

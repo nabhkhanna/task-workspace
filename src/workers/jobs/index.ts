@@ -1,15 +1,14 @@
-import { type TaskType } from '../../entities';
-import { DataAnalysisJob } from './DataAnalysisJob';
-import { EmailNotificationJob } from './EmailNotificationJob';
-import type { Job } from './Job';
+import type { Task, TaskOutput, TaskType } from '../../entities';
+import { runAnalysis } from './runAnalysis';
+import { runNotification } from './runNotification';
 
-const jobs: Record<TaskType, () => Job> = {
-  analysis: () => new DataAnalysisJob(),
-  notification: () => new EmailNotificationJob(),
-};
+export type JobFn = (task: Task) => Promise<TaskOutput>;
 
-export function getJob(taskType: TaskType): Job {
-  return jobs[taskType]();
+const jobs = {
+  analysis: runAnalysis,
+  notification: runNotification,
+} satisfies Record<TaskType, JobFn>;
+
+export function getJob(taskType: TaskType): JobFn {
+  return jobs[taskType];
 }
-
-export type { Job };

@@ -5,16 +5,22 @@ import type { TaskOutput } from './TaskOutput';
 import type { TaskStatus } from './TaskStatus';
 import type { TaskType } from './TaskType';
 
+interface TaskInit {
+  type: TaskType;
+  stepNumber: number;
+  workflow: Workflow;
+}
+
 @Entity({ name: 'tasks' })
 export class Task extends AbstractBaseEntity {
   @Column()
-  type!: TaskType;
+  readonly type!: TaskType;
 
   @Column()
   status!: TaskStatus;
 
   @Column({ default: 1 })
-  stepNumber!: number;
+  readonly stepNumber!: number;
 
   @Column({ type: 'simple-json', nullable: true })
   output!: TaskOutput | null;
@@ -23,5 +29,17 @@ export class Task extends AbstractBaseEntity {
     () => Workflow,
     (workflow) => workflow.tasks,
   )
-  workflow!: Workflow;
+  readonly workflow!: Workflow;
+
+  constructor(init?: TaskInit) {
+    super();
+    if (!init) {
+      return;
+    }
+    this.type = init.type;
+    this.stepNumber = init.stepNumber;
+    this.workflow = init.workflow;
+    this.status = 'queued';
+    this.output = null;
+  }
 }

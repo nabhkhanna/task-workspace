@@ -1,6 +1,6 @@
 import * as fs from 'node:fs';
 import * as yaml from 'js-yaml';
-import { Task, Workflow } from '../../entities';
+import { isTaskType, Task, type TaskType, Workflow } from '../../entities';
 import { repositories } from '../../repositories';
 
 interface WorkflowStep {
@@ -21,6 +21,14 @@ export class WorkflowService {
   async createFromYaml(filePath: string, clientId: string, geoJson: string): Promise<Workflow> {
     const fileContent = fs.readFileSync(filePath, 'utf8');
     const workflowDef = yaml.load(fileContent) as WorkflowDefinition;
+
+    const unknownTaskTypes = workflowDef.steps
+      .map((step) => step.taskType)
+      .filter((taskType) => !isTaskType(taskType));
+    if (unknownTaskTypes.length > 0) {
+      throw new Error(`Unknown task type(s) in workflow: ${unknownTaskTypes.join(', ')}`);
+    }
+
     const workflow = new Workflow();
 
     workflow.clientId = clientId;
@@ -33,7 +41,7 @@ export class WorkflowService {
       task.clientId = clientId;
       task.geoJson = geoJson;
       task.status = 'queued';
-      task.taskType = step.taskType;
+      task.taskType = step.taskType as TaskType;
       task.stepNumber = step.stepNumber;
       task.workflow = savedWorkflow;
       return task;

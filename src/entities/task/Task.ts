@@ -1,6 +1,7 @@
 import { Column, Entity, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
 import { Workflow } from '../workflow';
 import type { TaskStatus } from './TaskStatus';
+import type { TaskType } from './TaskType';
 
 @Entity({ name: 'tasks' })
 export class Task {
@@ -23,7 +24,7 @@ export class Task {
   resultId?: string;
 
   @Column()
-  taskType!: string;
+  taskType!: TaskType;
 
   @Column({ default: 1 })
   stepNumber!: number;

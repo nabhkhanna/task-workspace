@@ -1,5 +1,5 @@
 import { Result, Task } from '../entities';
-import { getJobForTaskType } from '../jobs';
+import { getJob } from '../jobs';
 import { logger } from '../logger';
 import { repositories } from '../repositories';
 import { WorkflowService } from '../services';
@@ -17,7 +17,7 @@ export class TaskRunner {
     task.status = 'in_progress';
     task.progress = 'starting job...';
     await repositories.taskRepository.save(task);
-    const job = getJobForTaskType(task.taskType);
+    const job = getJob(task.taskType);
 
     try {
       taskLogger.info('task.started');

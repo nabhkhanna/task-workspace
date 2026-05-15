@@ -27,17 +27,17 @@ function taskFor(geoJson: Feature<Polygon>) {
 }
 
 describe('runPolygonArea', () => {
-  it('returns the area in square meters for a small polygon near the equator', () => {
-    const result = runPolygonArea(taskFor(squarePolygon(0, 0, 0.01)));
+  it('returns the area in square meters for a small polygon near the equator', async () => {
+    const result = await runPolygonArea(taskFor(squarePolygon(0, 0, 0.01)));
 
     expect(result.type).toBe('polygon_area');
     expect(result.areaM2).toBeGreaterThan(4_900_000);
     expect(result.areaM2).toBeLessThan(5_000_000);
   });
 
-  it('returns a smaller area for the same-degree polygon at higher latitude', () => {
-    const equator = runPolygonArea(taskFor(squarePolygon(0, 0, 0.01)));
-    const highLatitude = runPolygonArea(taskFor(squarePolygon(0, 60, 0.01)));
+  it('returns a smaller area for the same-degree polygon at higher latitude', async () => {
+    const equator = await runPolygonArea(taskFor(squarePolygon(0, 0, 0.01)));
+    const highLatitude = await runPolygonArea(taskFor(squarePolygon(0, 60, 0.01)));
 
     expect(highLatitude.areaM2).toBeLessThan(equator.areaM2);
   });

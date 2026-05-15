@@ -4,7 +4,8 @@ import { config } from './config';
 import { AppDataSource } from './data-source';
 import { logger } from './logger';
 import { initRepositories, repositories } from './repositories';
-import { taskWorker } from './workers';
+import { TaskWorker } from './workers';
+import { runAnalysis, runNotification } from './workers/jobs';
 
 async function main(): Promise<void> {
   await AppDataSource.initialize();
@@ -16,9 +17,16 @@ async function main(): Promise<void> {
   }
 
   const app = createApp();
-  const abortController = new AbortController();
 
-  const workerPromise = taskWorker(abortController.signal).catch((error) => {
+  const worker = new TaskWorker({
+    taskRepository: repositories.taskRepository,
+    handlers: {
+      analysis: runAnalysis,
+      notification: runNotification,
+    },
+    maxRetries: config.MAX_TASK_RETRIES,
+  });
+  const workerPromise = worker.start().catch((error) => {
     logger.error({ err: error }, 'worker.crashed');
     process.exit(1);
   });
@@ -47,7 +55,7 @@ async function main(): Promise<void> {
       }
     });
 
-    abortController.abort();
+    await worker.stop();
     await workerPromise;
 
     try {

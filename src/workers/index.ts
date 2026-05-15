@@ -1,2 +1,1 @@
-export { TaskRunner } from './taskRunner';
-export { taskWorker } from './taskWorker';
+export { TaskWorker } from './taskWorker';

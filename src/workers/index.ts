@@ -1,1 +1,1 @@
-export { TaskWorker } from './taskWorker';
+export { TaskWorker } from './TaskWorker';

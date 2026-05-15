@@ -10,7 +10,7 @@ interface WorkflowInit {
 
 @Entity({ name: 'workflows' })
 export class Workflow extends AbstractBaseEntity {
-  @Column()
+  @Column({ type: 'varchar' })
   readonly clientId!: string;
 
   @Column({ type: 'simple-json' })

@@ -1,5 +1,4 @@
 import * as fs from 'node:fs';
-import type { Feature, Polygon } from 'geojson';
 import * as yaml from 'js-yaml';
 import { z } from 'zod';
 import { isTaskType, Task, type TaskType, Workflow } from '../../entities';
@@ -34,7 +33,7 @@ export class WorkflowService {
     if (!parseResult.success) {
       throw new Error(`Invalid geoJson input: ${parseResult.error.message}`);
     }
-    const validatedGeoJson = parseResult.data as Feature<Polygon>;
+    const validatedGeoJson = parseResult.data;
 
     const fileContent = fs.readFileSync(filePath, 'utf8');
     const workflowDef = yaml.load(fileContent) as WorkflowDefinition;
@@ -58,7 +57,7 @@ export class WorkflowService {
         }),
     );
 
-    await repositories.taskRepository.saveAll(tasks);
+    await repositories.taskRepository.save(tasks);
 
     return savedWorkflow;
   }

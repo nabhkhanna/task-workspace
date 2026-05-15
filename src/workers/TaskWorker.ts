@@ -2,10 +2,11 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import type { Task, TaskOutput, TaskType } from '../entities';
 import { logger } from '../logger';
 import type { TaskRepository } from '../repositories';
-import { computeNextAttemptAt } from './backoff';
 import type { JobFn } from './jobs';
 
 const DEFAULT_POLL_INTERVAL_MS = 5_000;
+const BACKOFF_BASE_DELAY_MS = 1_000;
+const BACKOFF_CAP_DELAY_MS = 5 * 60 * 1_000;
 
 type TaskOutcome = { kind: 'success'; output: TaskOutput } | { kind: 'failure'; error: Error };
 
@@ -125,8 +126,20 @@ export class TaskWorker {
     }
 
     task.status = 'queued';
-    task.nextAttemptAt = computeNextAttemptAt(task.attemptCount, now);
+    task.nextAttemptAt = this.computeNextAttemptAt(task.attemptCount, now);
     return false;
+  }
+
+  /**
+   * Exponential backoff with full jitter: schedules the next attempt at a
+   * uniformly random point between now and `min(cap, base * 2^(attemptCount - 1))`.
+   * Full jitter spreads load when many tasks fail simultaneously.
+   */
+  private computeNextAttemptAt(attemptCount: number, now: Date): Date {
+    const exponentialDelay = BACKOFF_BASE_DELAY_MS * 2 ** (attemptCount - 1);
+    const cappedDelay = Math.min(exponentialDelay, BACKOFF_CAP_DELAY_MS);
+    const jitteredDelay = Math.random() * cappedDelay;
+    return new Date(now.getTime() + jitteredDelay);
   }
 
   private async runLoop(): Promise<void> {

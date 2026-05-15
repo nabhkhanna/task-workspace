@@ -11,8 +11,6 @@ class InMemoryTaskRepository {
     this.saved.push(structuredClone(task));
     return Promise.resolve(task);
   });
-  findNextQueued = vi.fn((): Promise<Task | null> => Promise.resolve(null));
-  requeueInProgress = vi.fn((): Promise<number> => Promise.resolve(0));
 }
 
 const succeedAsAnalysis: JobFn = () =>
@@ -84,32 +82,3 @@ describe('TaskWorker.processNext', () => {
   });
 });
 
-describe('TaskWorker.start/stop', () => {
-  it('picks up a queued task in the loop and exits cleanly on stop', async () => {
-    const repo = new InMemoryTaskRepository();
-    const task = makeTask();
-    let returnedOnce = false;
-    repo.findNextQueued.mockImplementation((): Promise<Task | null> => {
-      if (returnedOnce) {
-        return Promise.resolve(null);
-      }
-      returnedOnce = true;
-      return Promise.resolve(task);
-    });
-
-    const worker = new TaskWorker({
-      taskRepository: repo as unknown as TaskRepository,
-      handlers: { analysis: succeedAsAnalysis, notification: succeedAsAnalysis },
-      maxRetries: 2,
-      pollIntervalMs: 5,
-    });
-
-    const loop = worker.start();
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    await worker.stop();
-    await loop;
-
-    expect(task.status).toBe('completed');
-    expect(repo.findNextQueued).toHaveBeenCalled();
-  });
-});

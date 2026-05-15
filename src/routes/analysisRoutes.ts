@@ -10,14 +10,10 @@ router.post('/', async (req, res) => {
   const workflowFile = path.join(__dirname, '../workflows/example_workflow.yml');
 
   try {
-    const workflow = await workflowService.createFromYaml(
-      workflowFile,
-      clientId,
-      JSON.stringify(geoJson),
-    );
+    const workflow = await workflowService.createFromYaml(workflowFile, clientId, geoJson);
 
     res.status(202).json({
-      workflowId: workflow.workflowId,
+      workflowId: workflow.id,
       message: 'Workflow created and tasks queued from YAML definition.',
     });
   } catch (error: unknown) {

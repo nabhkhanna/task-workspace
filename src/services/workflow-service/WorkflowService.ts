@@ -1,5 +1,7 @@
 import * as fs from 'node:fs';
+import type { Feature, Polygon } from 'geojson';
 import * as yaml from 'js-yaml';
+import { z } from 'zod';
 import { isTaskType, Task, type TaskType, Workflow } from '../../entities';
 import { repositories } from '../../repositories';
 
@@ -13,12 +15,27 @@ interface WorkflowDefinition {
   steps: WorkflowStep[];
 }
 
+const GeoJsonPolygonSchema = z.object({
+  type: z.literal('Feature'),
+  geometry: z.object({
+    type: z.literal('Polygon'),
+    coordinates: z.array(z.array(z.tuple([z.number(), z.number()]).rest(z.number()))),
+  }),
+  properties: z.record(z.string(), z.unknown()).nullable(),
+});
+
 export class WorkflowService {
   /**
    * Creates a workflow from a YAML definition, persists it, and queues
    * the associated tasks.
    */
-  async createFromYaml(filePath: string, clientId: string, geoJson: string): Promise<Workflow> {
+  async createFromYaml(filePath: string, clientId: string, geoJson: unknown): Promise<Workflow> {
+    const parseResult = GeoJsonPolygonSchema.safeParse(geoJson);
+    if (!parseResult.success) {
+      throw new Error(`Invalid geoJson input: ${parseResult.error.message}`);
+    }
+    const validatedGeoJson = parseResult.data as Feature<Polygon>;
+
     const fileContent = fs.readFileSync(filePath, 'utf8');
     const workflowDef = yaml.load(fileContent) as WorkflowDefinition;
 
@@ -30,18 +47,15 @@ export class WorkflowService {
     }
 
     const workflow = new Workflow();
-
     workflow.clientId = clientId;
-    workflow.status = 'initial';
+    workflow.geoJson = validatedGeoJson;
 
     const savedWorkflow = await repositories.workflowRepository.save(workflow);
 
     const tasks: Task[] = workflowDef.steps.map((step) => {
       const task = new Task();
-      task.clientId = clientId;
-      task.geoJson = geoJson;
       task.status = 'queued';
-      task.taskType = step.taskType as TaskType;
+      task.type = step.taskType as TaskType;
       task.stepNumber = step.stepNumber;
       task.workflow = savedWorkflow;
       return task;
@@ -50,31 +64,5 @@ export class WorkflowService {
     await repositories.taskRepository.saveAll(tasks);
 
     return savedWorkflow;
-  }
-
-  /**
-   * Recomputes a workflow's status based on the states of its tasks
-   * and persists the result if it changed.
-   *
-   * Called by the task runner after each task finishes.
-   */
-  async reconcileStatus(workflowId: string): Promise<void> {
-    const workflow = await repositories.workflowRepository.findByIdWithTasks(workflowId);
-    if (!workflow) {
-      return;
-    }
-
-    const allCompleted = workflow.tasks.every((task) => task.status === 'completed');
-    const anyFailed = workflow.tasks.some((task) => task.status === 'failed');
-
-    if (anyFailed) {
-      workflow.status = 'failed';
-    } else if (allCompleted) {
-      workflow.status = 'completed';
-    } else {
-      workflow.status = 'in_progress';
-    }
-
-    await repositories.workflowRepository.save(workflow);
   }
 }

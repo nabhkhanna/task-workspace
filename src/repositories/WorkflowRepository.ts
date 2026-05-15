@@ -12,9 +12,9 @@ export class WorkflowRepository {
    * Loads a workflow with all its tasks eager-populated. Used during
    * status reconciliation after a task completes.
    */
-  findByIdWithTasks(workflowId: string): Promise<Workflow | null> {
+  findByIdWithTasks(id: string): Promise<Workflow | null> {
     return this.repo.findOne({
-      where: { workflowId },
+      where: { id },
       relations: ['tasks'],
     });
   }

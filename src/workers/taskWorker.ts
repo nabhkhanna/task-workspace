@@ -16,7 +16,7 @@ export async function taskWorker(signal: AbortSignal): Promise<void> {
         await taskRunner.run(task);
       } catch (error) {
         logger.error(
-          { err: error, taskId: task.taskId },
+          { err: error, taskId: task.id },
           'worker.task_execution_failed_already_marked',
         );
       }

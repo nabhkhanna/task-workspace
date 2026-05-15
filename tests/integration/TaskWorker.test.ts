@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Task } from '../../src/entities';
 import type { TaskRepository } from '../../src/repositories';
-import type { JobFn } from '../../src/workers/jobs';
 import { TaskWorker } from '../../src/workers';
+import type { JobFn } from '../../src/workers/jobs';
+import { makeTask } from '../_helpers';
 
 class InMemoryTaskRepository {
   saved: Task[] = [];
@@ -14,23 +15,7 @@ class InMemoryTaskRepository {
   requeueInProgress = vi.fn((): Promise<number> => Promise.resolve(0));
 }
 
-function makeTask(): Task {
-  return {
-    id: 'task-1',
-    type: 'analysis',
-    status: 'queued',
-    stepNumber: 1,
-    output: null,
-    attemptCount: 0,
-    nextAttemptAt: null,
-    errorHistory: [],
-    workflow: { id: 'workflow-1' },
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  } as unknown as Task;
-}
-
-const noopAnalysis: JobFn = () =>
+const succeedAsAnalysis: JobFn = () =>
   Promise.resolve({ type: 'analysis', country: 'Germany' });
 
 describe('TaskWorker.processNext', () => {
@@ -40,10 +25,10 @@ describe('TaskWorker.processNext', () => {
     repo = new InMemoryTaskRepository();
   });
 
-  it('persists in_progress then completed on success', async () => {
+  it('marks the task completed and persists in_progress then completed in order', async () => {
     const worker = new TaskWorker({
       taskRepository: repo as unknown as TaskRepository,
-      handlers: { analysis: noopAnalysis, notification: noopAnalysis },
+      handlers: { analysis: succeedAsAnalysis, notification: succeedAsAnalysis },
       maxRetries: 2,
     });
     const task = makeTask();
@@ -58,7 +43,7 @@ describe('TaskWorker.processNext', () => {
     expect(repo.saved[1].status).toBe('completed');
   });
 
-  it('schedules a retry when budget remains', async () => {
+  it('schedules a retry with nextAttemptAt set when the budget still permits one', async () => {
     const failing: JobFn = () => Promise.reject(new Error('boom'));
     const worker = new TaskWorker({
       taskRepository: repo as unknown as TaskRepository,
@@ -76,7 +61,7 @@ describe('TaskWorker.processNext', () => {
     expect(task.errorHistory[0].error).toBe('boom');
   });
 
-  it('marks failed and throws when retries are exhausted', async () => {
+  it('marks the task failed and rethrows once retries are exhausted', async () => {
     const failing: JobFn = () => Promise.reject(new Error('still boom'));
     const worker = new TaskWorker({
       taskRepository: repo as unknown as TaskRepository,
@@ -100,7 +85,7 @@ describe('TaskWorker.processNext', () => {
 });
 
 describe('TaskWorker.start/stop', () => {
-  it('processes a queued task picked up by the loop then exits on stop', async () => {
+  it('picks up a queued task in the loop and exits cleanly on stop', async () => {
     const repo = new InMemoryTaskRepository();
     const task = makeTask();
     let returnedOnce = false;
@@ -114,13 +99,12 @@ describe('TaskWorker.start/stop', () => {
 
     const worker = new TaskWorker({
       taskRepository: repo as unknown as TaskRepository,
-      handlers: { analysis: noopAnalysis, notification: noopAnalysis },
+      handlers: { analysis: succeedAsAnalysis, notification: succeedAsAnalysis },
       maxRetries: 2,
       pollIntervalMs: 5,
     });
 
     const loop = worker.start();
-    // Give the loop a tick to pick up the task and start sleeping.
     await new Promise((resolve) => setTimeout(resolve, 20));
     await worker.stop();
     await loop;

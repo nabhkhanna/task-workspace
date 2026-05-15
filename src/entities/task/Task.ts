@@ -14,19 +14,19 @@ interface TaskInit {
 
 @Entity({ name: 'tasks' })
 export class Task extends AbstractBaseEntity {
-  @Column()
+  @Column({ type: 'varchar' })
   readonly type!: TaskType;
 
-  @Column()
+  @Column({ type: 'varchar' })
   status!: TaskStatus;
 
-  @Column({ default: 1 })
+  @Column({ type: 'integer', default: 1 })
   readonly stepNumber!: number;
 
   @Column({ type: 'simple-json', nullable: true })
   output!: TaskOutput | null;
 
-  @Column({ default: 0 })
+  @Column({ type: 'integer', default: 0 })
   attemptCount!: number;
 
   @Column({ type: 'datetime', nullable: true })

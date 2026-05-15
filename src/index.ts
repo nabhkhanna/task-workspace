@@ -5,7 +5,7 @@ import { AppDataSource } from './data-source';
 import { logger } from './logger';
 import { initRepositories, repositories } from './repositories';
 import { TaskWorker } from './workers';
-import { runAnalysis, runNotification } from './workers/jobs';
+import { runAnalysis, runNotification, runPolygonArea } from './workers/jobs';
 
 async function main(): Promise<void> {
   await AppDataSource.initialize();
@@ -23,6 +23,7 @@ async function main(): Promise<void> {
     handlers: {
       analysis: runAnalysis,
       notification: runNotification,
+      polygon_area: runPolygonArea,
     },
     maxRetries: config.MAX_TASK_RETRIES,
   });

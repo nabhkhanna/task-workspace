@@ -26,7 +26,11 @@ describe('TaskWorker.processNext', () => {
   it('marks the task completed and persists in_progress then completed in order', async () => {
     const worker = new TaskWorker({
       taskRepository: repo as unknown as TaskRepository,
-      handlers: { analysis: succeedAsAnalysis, notification: succeedAsAnalysis },
+      handlers: {
+        analysis: succeedAsAnalysis,
+        notification: succeedAsAnalysis,
+        polygon_area: succeedAsAnalysis,
+      },
       maxRetries: 2,
     });
     const task = makeTask();
@@ -45,7 +49,7 @@ describe('TaskWorker.processNext', () => {
     const failing: JobFn = () => Promise.reject(new Error('boom'));
     const worker = new TaskWorker({
       taskRepository: repo as unknown as TaskRepository,
-      handlers: { analysis: failing, notification: failing },
+      handlers: { analysis: failing, notification: failing, polygon_area: failing },
       maxRetries: 2,
     });
     const task = makeTask();
@@ -63,7 +67,7 @@ describe('TaskWorker.processNext', () => {
     const failing: JobFn = () => Promise.reject(new Error('still boom'));
     const worker = new TaskWorker({
       taskRepository: repo as unknown as TaskRepository,
-      handlers: { analysis: failing, notification: failing },
+      handlers: { analysis: failing, notification: failing, polygon_area: failing },
       maxRetries: 2,
     });
     const task = makeTask();

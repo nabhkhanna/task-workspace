@@ -46,20 +46,17 @@ export class WorkflowService {
       throw new Error(`Unknown task type(s) in workflow: ${unknownTaskTypes.join(', ')}`);
     }
 
-    const workflow = new Workflow();
-    workflow.clientId = clientId;
-    workflow.geoJson = validatedGeoJson;
-
+    const workflow = new Workflow({ clientId, geoJson: validatedGeoJson });
     const savedWorkflow = await repositories.workflowRepository.save(workflow);
 
-    const tasks: Task[] = workflowDef.steps.map((step) => {
-      const task = new Task();
-      task.status = 'queued';
-      task.type = step.taskType as TaskType;
-      task.stepNumber = step.stepNumber;
-      task.workflow = savedWorkflow;
-      return task;
-    });
+    const tasks: Task[] = workflowDef.steps.map(
+      (step) =>
+        new Task({
+          type: step.taskType as TaskType,
+          stepNumber: step.stepNumber,
+          workflow: savedWorkflow,
+        }),
+    );
 
     await repositories.taskRepository.saveAll(tasks);
 

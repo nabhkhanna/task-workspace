@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Task, TaskType } from '../../src/entities';
-import type { TaskRepository } from '../../src/repositories/TaskRepository';
-import { TaskRunner } from '../../src/workers/taskRunner';
+import type { Task } from '../../src/entities';
+import type { TaskRepository } from '../../src/repositories';
+import { TaskRunner } from '../../src/workers';
 
 class InMemoryTaskRepository {
   saved: Task[] = [];
-  save = vi.fn(async (task: Task): Promise<Task> => {
+  save = vi.fn((task: Task): Promise<Task> => {
     this.saved.push(structuredClone(task));
-    return task;
+    return Promise.resolve(task);
   });
 }
 
@@ -38,7 +38,7 @@ describe('TaskRunner retry/backoff', () => {
   it('marks completed and records attemptCount on first success', async () => {
     const runner = new TaskRunner({
       taskRepository: repo as unknown as TaskRepository,
-      getJob: () => async () => ({ type: 'analysis', country: 'Germany' }),
+      getJob: () => () => Promise.resolve({ type: 'analysis', country: 'Germany' }),
       computeNextAttemptAt: () => fixedNext,
       maxRetries: 2,
     });
@@ -56,9 +56,7 @@ describe('TaskRunner retry/backoff', () => {
   it('schedules a retry on failure when budget remains', async () => {
     const runner = new TaskRunner({
       taskRepository: repo as unknown as TaskRepository,
-      getJob: () => async () => {
-        throw new Error('boom');
-      },
+      getJob: () => () => Promise.reject(new Error('boom')),
       computeNextAttemptAt: () => fixedNext,
       maxRetries: 2,
     });
@@ -77,9 +75,7 @@ describe('TaskRunner retry/backoff', () => {
   it('marks failed and throws when retries are exhausted', async () => {
     const runner = new TaskRunner({
       taskRepository: repo as unknown as TaskRepository,
-      getJob: () => async () => {
-        throw new Error('still boom');
-      },
+      getJob: () => () => Promise.reject(new Error('still boom')),
       computeNextAttemptAt: () => fixedNext,
       maxRetries: 2,
     });

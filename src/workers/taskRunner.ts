@@ -1,8 +1,7 @@
 import { config } from '../config';
 import type { Task } from '../entities';
 import { logger } from '../logger';
-import type { TaskRepository } from '../repositories';
-import { repositories } from '../repositories';
+import { repositories, type TaskRepository } from '../repositories';
 import { computeNextAttemptAt as defaultComputeNextAttemptAt } from './backoff';
 import { getJob as defaultGetJob } from './jobs';
 

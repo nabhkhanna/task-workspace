@@ -8,7 +8,7 @@ import {
   type WorkflowRepository,
 } from '../../src/repositories';
 import { TaskWorker } from '../../src/workers';
-import { runAnalysis, runNotification } from '../../src/workers/jobs';
+import { runAnalysis, runNotification, runPolygonArea } from '../../src/workers/jobs';
 import { createTestDataSource, makeTask, makeWorkflow } from '../_helpers';
 
 const germanyPolygon: Feature<Polygon> = {
@@ -76,37 +76,51 @@ describe('TaskWorker end-to-end with real handlers and real DB', () => {
     );
     await taskRepository.save([
       makeTask({ workflow, type: 'analysis', stepNumber: 1 }),
-      makeTask({ workflow, type: 'notification', stepNumber: 2 }),
+      makeTask({ workflow, type: 'polygon_area', stepNumber: 2 }),
+      makeTask({ workflow, type: 'notification', stepNumber: 3 }),
     ]);
 
     worker = new TaskWorker({
       taskRepository,
-      handlers: { analysis: runAnalysis, notification: runNotification },
+      handlers: {
+        analysis: runAnalysis,
+        notification: runNotification,
+        polygon_area: runPolygonArea,
+      },
       maxRetries: 0,
       pollIntervalMs: 10,
     });
     worker.start();
 
     await waitForCondition(
-      async () => (await taskRepository.count({ where: { status: 'completed' } })) === 2,
+      async () => (await taskRepository.count({ where: { status: 'completed' } })) === 3,
       { timeoutMs: 5_000, intervalMs: 25 },
     );
 
     const persisted = await workflowRepository.findByIdWithTasks(workflow.id);
     const tasks = persisted?.tasks.sort((a, b) => a.stepNumber - b.stepNumber) ?? [];
 
-    expect(tasks).toHaveLength(2);
+    expect(tasks).toHaveLength(3);
     expect(tasks[0].type).toBe('analysis');
     expect(tasks[0].status).toBe('completed');
     expect(tasks[0].output).toEqual({ type: 'analysis', country: 'Germany' });
     expect(tasks[0].attemptCount).toBe(1);
 
-    expect(tasks[1].type).toBe('notification');
+    expect(tasks[1].type).toBe('polygon_area');
     expect(tasks[1].status).toBe('completed');
-    expect(tasks[1].output).toEqual({ type: 'notification' });
+    expect(tasks[1].output?.type).toBe('polygon_area');
+    if (tasks[1].output?.type === 'polygon_area') {
+      expect(tasks[1].output.areaM2).toBeGreaterThan(0);
+    }
     expect(tasks[1].attemptCount).toBe(1);
 
+    expect(tasks[2].type).toBe('notification');
+    expect(tasks[2].status).toBe('completed');
+    expect(tasks[2].output).toEqual({ type: 'notification' });
+    expect(tasks[2].attemptCount).toBe(1);
+
     expect(tasks[0].updatedAt.getTime()).toBeLessThanOrEqual(tasks[1].updatedAt.getTime());
+    expect(tasks[1].updatedAt.getTime()).toBeLessThanOrEqual(tasks[2].updatedAt.getTime());
   });
 
   it('does not pick up a task whose nextAttemptAt is still in the future', async () => {
@@ -124,7 +138,11 @@ describe('TaskWorker end-to-end with real handlers and real DB', () => {
 
     worker = new TaskWorker({
       taskRepository,
-      handlers: { analysis: runAnalysis, notification: runNotification },
+      handlers: {
+        analysis: runAnalysis,
+        notification: runNotification,
+        polygon_area: runPolygonArea,
+      },
       maxRetries: 0,
       pollIntervalMs: 10,
     });

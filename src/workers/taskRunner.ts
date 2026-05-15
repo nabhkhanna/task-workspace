@@ -1,46 +1,33 @@
-import { Result, Task } from '../entities';
+import type { Task } from '../entities';
 import { logger } from '../logger';
 import { repositories } from '../repositories';
-import { WorkflowService } from '../services';
 import { getJob } from './jobs';
 
 export class TaskRunner {
-  private readonly workflowService = new WorkflowService();
-
   /**
-   * Executes the job for a task, persists the result, and triggers
-   * a workflow status reconciliation.
+   * Executes the job for a task and persists the output. Workflow status is
+   * derived from task statuses at read-time (see deriveWorkflowStatus), so no
+   * reconciliation write is needed here.
    */
   async run(task: Task): Promise<void> {
-    const taskLogger = logger.child({ taskId: task.taskId, taskType: task.taskType });
+    const taskLogger = logger.child({ taskId: task.id, taskType: task.type });
 
     task.status = 'in_progress';
-    task.progress = 'starting job...';
     await repositories.taskRepository.save(task);
-    const job = getJob(task.taskType);
+    const job = getJob(task.type);
 
     try {
       taskLogger.info('task.started');
-      const taskResult = await job.run(task);
+      const output = await job.run(task);
       taskLogger.info('task.completed');
-      const result = new Result();
-      result.taskId = task.taskId ?? '';
-      result.data = JSON.stringify(taskResult ?? {});
-      await repositories.resultRepository.save(result);
-      task.resultId = result.resultId ?? '';
+      task.output = output;
       task.status = 'completed';
-      task.progress = null;
       await repositories.taskRepository.save(task);
     } catch (error: unknown) {
       taskLogger.error({ err: error }, 'task.failed');
-
       task.status = 'failed';
-      task.progress = null;
       await repositories.taskRepository.save(task);
-
       throw error;
     }
-
-    await this.workflowService.reconcileStatus(task.workflow.workflowId);
   }
 }

@@ -1,33 +1,23 @@
-import { Column, Entity, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, Entity, ManyToOne } from 'typeorm';
+import { AbstractBaseEntity } from '../AbstractBaseEntity';
 import { Workflow } from '../workflow';
+import type { TaskOutput } from './TaskOutput';
 import type { TaskStatus } from './TaskStatus';
 import type { TaskType } from './TaskType';
 
 @Entity({ name: 'tasks' })
-export class Task {
-  @PrimaryGeneratedColumn('uuid')
-  taskId!: string;
-
+export class Task extends AbstractBaseEntity {
   @Column()
-  clientId!: string;
-
-  @Column('text')
-  geoJson!: string;
+  type!: TaskType;
 
   @Column()
   status!: TaskStatus;
 
-  @Column({ nullable: true, type: 'text' })
-  progress?: string | null;
-
-  @Column({ nullable: true })
-  resultId?: string;
-
-  @Column()
-  taskType!: TaskType;
-
   @Column({ default: 1 })
   stepNumber!: number;
+
+  @Column({ type: 'simple-json', nullable: true })
+  output!: TaskOutput | null;
 
   @ManyToOne(
     () => Workflow,

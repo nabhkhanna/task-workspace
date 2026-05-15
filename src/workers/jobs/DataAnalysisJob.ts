@@ -1,13 +1,15 @@
 import booleanWithin from '@turf/boolean-within';
-import { Feature, Polygon } from 'geojson';
+import type { Feature, Polygon } from 'geojson';
 import countryMapping from '../../data/world_data.json';
-import { Task } from '../../entities';
+import type { Task } from '../../entities';
 import { logger } from '../../logger';
-import { Job } from './Job';
+import type { Job } from './Job';
+
+const NO_COUNTRY_MATCH = 'No country found';
 
 export class DataAnalysisJob implements Job {
-  run(task: Task): Promise<string> {
-    const inputGeometry: Feature<Polygon> = JSON.parse(task.geoJson);
+  run(task: Task): Promise<{ type: 'analysis'; country: string }> {
+    const inputGeometry = task.workflow.geoJson;
 
     for (const countryFeature of countryMapping.features) {
       if (
@@ -16,12 +18,12 @@ export class DataAnalysisJob implements Job {
       ) {
         const isWithin = booleanWithin(inputGeometry, countryFeature as Feature<Polygon>);
         if (isWithin) {
-          const country = countryFeature.properties?.name ?? 'No country found';
-          logger.info({ taskId: task.taskId, country }, 'job.analysis.country_matched');
-          return Promise.resolve(country);
+          const country = countryFeature.properties?.name ?? NO_COUNTRY_MATCH;
+          logger.info({ taskId: task.id, country }, 'job.analysis.country_matched');
+          return Promise.resolve({ type: 'analysis', country });
         }
       }
     }
-    return Promise.resolve('No country found');
+    return Promise.resolve({ type: 'analysis', country: NO_COUNTRY_MATCH });
   }
 }

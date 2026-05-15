@@ -1,17 +1,15 @@
-import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
+import type { Feature, Polygon } from 'geojson';
+import { Column, Entity, OneToMany } from 'typeorm';
+import { AbstractBaseEntity } from '../AbstractBaseEntity';
 import { Task } from '../task';
-import type { WorkflowStatus } from './WorkflowStatus';
 
 @Entity({ name: 'workflows' })
-export class Workflow {
-  @PrimaryGeneratedColumn('uuid')
-  workflowId!: string;
-
+export class Workflow extends AbstractBaseEntity {
   @Column()
   clientId!: string;
 
-  @Column({ default: 'initial' })
-  status!: WorkflowStatus;
+  @Column({ type: 'simple-json' })
+  geoJson!: Feature<Polygon>;
 
   @OneToMany(
     () => Task,

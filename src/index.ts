@@ -3,12 +3,17 @@ import { createApp } from './app';
 import { config } from './config';
 import { AppDataSource } from './data-source';
 import { logger } from './logger';
-import { initRepositories } from './repositories';
+import { initRepositories, repositories } from './repositories';
 import { taskWorker } from './workers';
 
 async function main(): Promise<void> {
   await AppDataSource.initialize();
   initRepositories(AppDataSource);
+
+  const requeuedCount = await repositories.taskRepository.requeueInProgress();
+  if (requeuedCount > 0) {
+    logger.warn({ count: requeuedCount }, 'startup.requeued_interrupted_tasks');
+  }
 
   const app = createApp();
   const abortController = new AbortController();

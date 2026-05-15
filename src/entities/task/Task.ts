@@ -1,6 +1,7 @@
 import { Column, Entity, ManyToOne } from 'typeorm';
 import { AbstractBaseEntity } from '../AbstractBaseEntity';
 import { Workflow } from '../workflow';
+import type { ErrorHistoryEntry } from './ErrorHistoryEntry';
 import type { TaskOutput } from './TaskOutput';
 import type { TaskStatus } from './TaskStatus';
 import type { TaskType } from './TaskType';
@@ -25,6 +26,15 @@ export class Task extends AbstractBaseEntity {
   @Column({ type: 'simple-json', nullable: true })
   output!: TaskOutput | null;
 
+  @Column({ default: 0 })
+  attemptCount!: number;
+
+  @Column({ type: 'datetime', nullable: true })
+  nextAttemptAt!: Date | null;
+
+  @Column({ type: 'simple-json', default: '[]' })
+  errorHistory!: ErrorHistoryEntry[];
+
   @ManyToOne(
     () => Workflow,
     (workflow) => workflow.tasks,
@@ -41,5 +51,8 @@ export class Task extends AbstractBaseEntity {
     this.workflow = init.workflow;
     this.status = 'queued';
     this.output = null;
+    this.attemptCount = 0;
+    this.nextAttemptAt = null;
+    this.errorHistory = [];
   }
 }

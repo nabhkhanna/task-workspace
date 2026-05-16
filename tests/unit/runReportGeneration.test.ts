@@ -5,13 +5,12 @@ import { makeTask, makeWorkflow } from '../_helpers';
 const ATTEMPTED_AT = '2026-05-16T12:00:00.000Z';
 
 describe('buildReport', () => {
-  it('includes one entry per preceding task with taskId, type, and output', () => {
+  it('includes one entry per terminal sibling task with taskId, type, and output', () => {
     const workflow = makeWorkflow({ id: 'wf-1' });
     const analysis = makeTask({
       id: 'task-analysis',
       workflow,
       type: 'analysis',
-      stepNumber: 1,
       status: 'completed',
       output: { type: 'analysis', country: 'Germany' },
     });
@@ -19,7 +18,6 @@ describe('buildReport', () => {
       id: 'task-polygon',
       workflow,
       type: 'polygon_area',
-      stepNumber: 2,
       status: 'completed',
       output: { type: 'polygon_area', areaM2: 12345 },
     });
@@ -27,7 +25,6 @@ describe('buildReport', () => {
       id: 'task-report',
       workflow,
       type: 'report_generation',
-      stepNumber: 3,
       status: 'in_progress',
     });
     workflow.tasks = [analysis, polygon, reportTask];
@@ -55,14 +52,12 @@ describe('buildReport', () => {
       id: 'task-analysis',
       workflow,
       type: 'analysis',
-      stepNumber: 1,
       status: 'completed',
     });
     const reportTask = makeTask({
       id: 'task-report',
       workflow,
       type: 'report_generation',
-      stepNumber: 2,
       status: 'in_progress',
     });
     workflow.tasks = [analysis, reportTask];
@@ -73,27 +68,24 @@ describe('buildReport', () => {
     expect(report.tasks[0].taskId).toBe('task-analysis');
   });
 
-  it('excludes tasks with higher stepNumber (not yet run)', () => {
+  it('excludes still-queued or in-progress sibling tasks', () => {
     const workflow = makeWorkflow({ id: 'wf-3' });
     const analysis = makeTask({
       id: 'task-analysis',
       workflow,
       type: 'analysis',
-      stepNumber: 1,
       status: 'completed',
     });
     const reportTask = makeTask({
       id: 'task-report',
       workflow,
       type: 'report_generation',
-      stepNumber: 2,
       status: 'in_progress',
     });
     const trailing = makeTask({
       id: 'task-trailing',
       workflow,
       type: 'notification',
-      stepNumber: 3,
       status: 'queued',
     });
     workflow.tasks = [analysis, reportTask, trailing];
@@ -109,7 +101,6 @@ describe('buildReport', () => {
       id: 'task-failed',
       workflow,
       type: 'analysis',
-      stepNumber: 1,
       status: 'failed',
       output: null,
       errorHistory: [
@@ -121,7 +112,6 @@ describe('buildReport', () => {
       id: 'task-report',
       workflow,
       type: 'report_generation',
-      stepNumber: 2,
       status: 'in_progress',
     });
     workflow.tasks = [failedTask, reportTask];
@@ -142,7 +132,6 @@ describe('buildReport', () => {
       id: 'task-ok',
       workflow,
       type: 'analysis',
-      stepNumber: 1,
       status: 'completed',
       output: { type: 'analysis', country: 'France' },
     });
@@ -150,7 +139,6 @@ describe('buildReport', () => {
       id: 'task-report',
       workflow,
       type: 'report_generation',
-      stepNumber: 2,
       status: 'in_progress',
     });
     workflow.tasks = [completedTask, reportTask];
@@ -165,13 +153,11 @@ describe('buildReport', () => {
     const a = makeTask({
       workflow,
       type: 'analysis',
-      stepNumber: 1,
       status: 'completed',
     });
     const reportTask = makeTask({
       workflow,
       type: 'report_generation',
-      stepNumber: 2,
       status: 'in_progress',
     });
     workflow.tasks = [a, reportTask];
@@ -186,7 +172,6 @@ describe('buildReport', () => {
     const reportTask = makeTask({
       workflow,
       type: 'report_generation',
-      stepNumber: 1,
       status: 'in_progress',
     });
     workflow.tasks = [reportTask];

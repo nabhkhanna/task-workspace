@@ -31,117 +31,110 @@ describe('TaskRepository.findNextRunnableTask', () => {
     await workflowRepository.clear();
   });
 
-  it('returns the lowest-stepNumber runnable task when no earlier step blocks', async () => {
-    const workflow = await workflowRepository.save(makeWorkflow({ clientId: 'A' }));
-    await taskRepository.save([
-      makeTask({ workflow, type: 'analysis', stepNumber: 1, status: 'completed' }),
-      makeTask({ workflow, type: 'polygon_area', stepNumber: 2 }),
-      makeTask({ workflow, type: 'notification', stepNumber: 3 }),
-    ]);
+  it('returns null when no queued tasks exist', async () => {
+    const workflow = await workflowRepository.save(makeWorkflow({ clientId: 'empty' }));
+    await taskRepository.save(
+      makeTask({ workflow, type: 'analysis', status: 'completed' }),
+    );
+
+    expect(await taskRepository.findNextRunnableTask()).toBeNull();
+  });
+
+  it('returns a task that has no dependencies', async () => {
+    const workflow = await workflowRepository.save(makeWorkflow({ clientId: 'no-deps' }));
+    await taskRepository.save(makeTask({ workflow, type: 'analysis' }));
 
     const next = await taskRepository.findNextRunnableTask();
 
-    expect(next?.stepNumber).toBe(2);
-    expect(next?.type).toBe('polygon_area');
+    expect(next?.type).toBe('analysis');
   });
 
   it('skips a task whose nextAttemptAt is still in the future', async () => {
-    const workflow = await workflowRepository.save(makeWorkflow({ clientId: 'B' }));
+    const workflow = await workflowRepository.save(makeWorkflow({ clientId: 'backoff' }));
     await taskRepository.save(
       makeTask({
         workflow,
         type: 'analysis',
-        stepNumber: 1,
         nextAttemptAt: new Date(Date.now() + FUTURE_OFFSET_MS),
       }),
     );
 
-    const next = await taskRepository.findNextRunnableTask();
-
-    expect(next).toBeNull();
+    expect(await taskRepository.findNextRunnableTask()).toBeNull();
   });
 
   it('returns a task once its nextAttemptAt has passed', async () => {
-    const workflow = await workflowRepository.save(makeWorkflow({ clientId: 'C' }));
+    const workflow = await workflowRepository.save(makeWorkflow({ clientId: 'past-backoff' }));
     await taskRepository.save(
       makeTask({
         workflow,
         type: 'analysis',
-        stepNumber: 1,
         nextAttemptAt: new Date(Date.now() - PAST_OFFSET_MS),
       }),
     );
 
     const next = await taskRepository.findNextRunnableTask();
-
-    expect(next?.stepNumber).toBe(1);
+    expect(next?.type).toBe('analysis');
   });
 
-  it('does not return a later step while an earlier step is still queued', async () => {
-    const workflow = await workflowRepository.save(makeWorkflow({ clientId: 'D' }));
-    await taskRepository.save([
-      makeTask({
-        workflow,
-        type: 'analysis',
-        stepNumber: 1,
-        nextAttemptAt: new Date(Date.now() + FUTURE_OFFSET_MS),
-      }),
-      makeTask({ workflow, type: 'polygon_area', stepNumber: 2 }),
-    ]);
+  it('does not return a task while a dependency is still queued', async () => {
+    const workflow = await workflowRepository.save(makeWorkflow({ clientId: 'dep-queued' }));
+    const dependency = makeTask({ workflow, type: 'analysis' });
+    const dependent = makeTask({ workflow, type: 'polygon_area' });
+    await taskRepository.save([dependency, dependent]);
+    dependent.dependencies = [dependency];
+    await taskRepository.save([dependent]);
+
+    expect(await taskRepository.findNextRunnableTask()).not.toBeNull();
+    const next = await taskRepository.findNextRunnableTask();
+    expect(next?.id).toBe(dependency.id);
+  });
+
+  it('does not return a task while a dependency is in_progress', async () => {
+    const workflow = await workflowRepository.save(makeWorkflow({ clientId: 'dep-running' }));
+    const dependency = makeTask({ workflow, type: 'analysis', status: 'in_progress' });
+    const dependent = makeTask({ workflow, type: 'polygon_area' });
+    await taskRepository.save([dependency, dependent]);
+    dependent.dependencies = [dependency];
+    await taskRepository.save([dependent]);
 
     const next = await taskRepository.findNextRunnableTask();
-
     expect(next).toBeNull();
   });
 
-  it('does not return a later step while an earlier step is in_progress', async () => {
-    const workflow = await workflowRepository.save(makeWorkflow({ clientId: 'E' }));
-    await taskRepository.save([
-      makeTask({ workflow, type: 'analysis', stepNumber: 1, status: 'in_progress' }),
-      makeTask({ workflow, type: 'polygon_area', stepNumber: 2 }),
-    ]);
+  it('returns a task once its dependency is completed', async () => {
+    const workflow = await workflowRepository.save(makeWorkflow({ clientId: 'dep-done' }));
+    const dependency = makeTask({ workflow, type: 'analysis', status: 'completed' });
+    const dependent = makeTask({ workflow, type: 'polygon_area' });
+    await taskRepository.save([dependency, dependent]);
+    dependent.dependencies = [dependency];
+    await taskRepository.save([dependent]);
 
     const next = await taskRepository.findNextRunnableTask();
-
-    expect(next).toBeNull();
+    expect(next?.id).toBe(dependent.id);
   });
 
-  it('releases the later step once the earlier step is completed', async () => {
-    const workflow = await workflowRepository.save(makeWorkflow({ clientId: 'F' }));
-    await taskRepository.save([
-      makeTask({ workflow, type: 'analysis', stepNumber: 1, status: 'completed' }),
-      makeTask({ workflow, type: 'polygon_area', stepNumber: 2 }),
-    ]);
+  it('returns a task even when its dependency failed (failure is terminal)', async () => {
+    const workflow = await workflowRepository.save(makeWorkflow({ clientId: 'dep-failed' }));
+    const dependency = makeTask({ workflow, type: 'analysis', status: 'failed' });
+    const dependent = makeTask({ workflow, type: 'polygon_area' });
+    await taskRepository.save([dependency, dependent]);
+    dependent.dependencies = [dependency];
+    await taskRepository.save([dependent]);
 
     const next = await taskRepository.findNextRunnableTask();
-
-    expect(next?.stepNumber).toBe(2);
+    expect(next?.id).toBe(dependent.id);
   });
 
-  it('releases the later step when the earlier step is failed (failure is terminal)', async () => {
-    const workflow = await workflowRepository.save(makeWorkflow({ clientId: 'G' }));
-    await taskRepository.save([
-      makeTask({ workflow, type: 'analysis', stepNumber: 1, status: 'failed' }),
-      makeTask({ workflow, type: 'polygon_area', stepNumber: 2 }),
-    ]);
+  it('requires ALL dependencies to be terminal (one queued blocks the dependent)', async () => {
+    const workflow = await workflowRepository.save(makeWorkflow({ clientId: 'multi-deps' }));
+    const doneDep = makeTask({ workflow, type: 'analysis', status: 'completed' });
+    const stillRunningDep = makeTask({ workflow, type: 'polygon_area' });
+    const dependent = makeTask({ workflow, type: 'report_generation' });
+    await taskRepository.save([doneDep, stillRunningDep, dependent]);
+    dependent.dependencies = [doneDep, stillRunningDep];
+    await taskRepository.save([dependent]);
 
     const next = await taskRepository.findNextRunnableTask();
-
-    expect(next?.stepNumber).toBe(2);
-  });
-
-  it('scopes the sequencing block per workflow', async () => {
-    const blocked = await workflowRepository.save(makeWorkflow({ clientId: 'blocked' }));
-    const unblocked = await workflowRepository.save(makeWorkflow({ clientId: 'unblocked' }));
-    await taskRepository.save([
-      makeTask({ workflow: blocked, type: 'analysis', stepNumber: 1, status: 'in_progress' }),
-      makeTask({ workflow: blocked, type: 'polygon_area', stepNumber: 2 }),
-      makeTask({ workflow: unblocked, type: 'analysis', stepNumber: 1 }),
-    ]);
-
-    const next = await taskRepository.findNextRunnableTask();
-
-    expect(next?.workflow.id).toBe(unblocked.id);
-    expect(next?.stepNumber).toBe(1);
+    expect(next?.id).toBe(stillRunningDep.id);
   });
 });

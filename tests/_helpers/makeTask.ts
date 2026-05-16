@@ -12,19 +12,19 @@ interface MakeTaskOverrides {
   id?: string;
   type?: TaskType;
   status?: TaskStatus;
-  stepNumber?: number;
   output?: TaskOutput | null;
   attemptCount?: number;
   nextAttemptAt?: Date | null;
   errorHistory?: ErrorHistoryEntry[];
   workflow?: Workflow;
+  dependencies?: Task[];
 }
 
 export function makeTask(overrides: MakeTaskOverrides = {}): Task {
   const task = new Task({
     type: overrides.type ?? 'analysis',
-    stepNumber: overrides.stepNumber ?? 1,
     workflow: overrides.workflow ?? makeWorkflow(),
+    dependencies: overrides.dependencies,
   });
   if (overrides.status !== undefined) {
     task.status = overrides.status;

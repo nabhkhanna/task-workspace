@@ -1,18 +1,9 @@
 import * as fs from 'node:fs';
 import * as yaml from 'js-yaml';
 import { z } from 'zod';
-import { isTaskType, Task, type TaskType, Workflow } from '../../entities';
+import { Task, type TaskType, Workflow } from '../../entities';
 import { repositories } from '../../repositories';
-
-interface WorkflowStep {
-  taskType: string;
-  stepNumber: number;
-}
-
-interface WorkflowDefinition {
-  name: string;
-  steps: WorkflowStep[];
-}
+import { validateWorkflowDefinition, type WorkflowDefinition } from './workflowValidation';
 
 const GeoJsonPolygonSchema = z.object({
   type: z.literal('Feature'),
@@ -26,7 +17,7 @@ const GeoJsonPolygonSchema = z.object({
 export class WorkflowService {
   /**
    * Creates a workflow from a YAML definition, persists it, and queues
-   * the associated tasks.
+   * the associated tasks with their dependsOn relationships wired up.
    */
   async createFromYaml(filePath: string, clientId: string, geoJson: unknown): Promise<Workflow> {
     const parseResult = GeoJsonPolygonSchema.safeParse(geoJson);
@@ -38,25 +29,34 @@ export class WorkflowService {
     const fileContent = fs.readFileSync(filePath, 'utf8');
     const workflowDef = yaml.load(fileContent) as WorkflowDefinition;
 
-    const unknownTaskTypes = workflowDef.steps
-      .map((step) => step.taskType)
-      .filter((taskType) => !isTaskType(taskType));
-    if (unknownTaskTypes.length > 0) {
-      throw new Error(`Unknown task type(s) in workflow: ${unknownTaskTypes.join(', ')}`);
-    }
+    validateWorkflowDefinition(workflowDef);
 
     const workflow = new Workflow({ clientId, geoJson: validatedGeoJson });
     const savedWorkflow = await repositories.workflowRepository.save(workflow);
 
-    const tasks: Task[] = workflowDef.steps.map(
-      (step) =>
-        new Task({
-          type: step.taskType as TaskType,
-          stepNumber: step.stepNumber,
-          workflow: savedWorkflow,
-        }),
-    );
+    const tasksByType = new Map<string, Task>();
+    for (const step of workflowDef.steps) {
+      tasksByType.set(
+        step.taskType,
+        new Task({ type: step.taskType as TaskType, workflow: savedWorkflow }),
+      );
+    }
+    const tasks = [...tasksByType.values()];
+    await repositories.taskRepository.save(tasks);
 
+    for (const step of workflowDef.steps) {
+      const task = tasksByType.get(step.taskType);
+      if (!task) {
+        continue;
+      }
+      task.dependencies = (step.dependsOn ?? []).map((depType) => {
+        const dep = tasksByType.get(depType);
+        if (!dep) {
+          throw new Error(`Unknown dependency: ${depType}`);
+        }
+        return dep;
+      });
+    }
     await repositories.taskRepository.save(tasks);
 
     return savedWorkflow;

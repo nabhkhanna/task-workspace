@@ -1,12 +1,20 @@
-import type { ReportPayload, ReportTaskEntry, Task, TaskOutput, Workflow } from '../../entities';
+import type {
+  ReportPayload,
+  ReportTaskEntry,
+  Task,
+  TaskOutput,
+  TaskStatus,
+  Workflow,
+} from '../../entities';
 import type { WorkflowRepository } from '../../repositories';
 import type { JobFn } from '.';
 
 const FINAL_REPORT_TEXT = 'Aggregated data and results';
+const TERMINAL_TASK_STATUSES: readonly TaskStatus[] = ['completed', 'failed'];
 
 export function buildReport(currentTask: Task, workflow: Workflow): ReportPayload {
   const precedingTasks = workflow.tasks.filter(
-    (sibling) => sibling.stepNumber < currentTask.stepNumber,
+    (sibling) => sibling.id !== currentTask.id && TERMINAL_TASK_STATUSES.includes(sibling.status),
   );
 
   const tasks: ReportTaskEntry[] = precedingTasks.map((sibling) => {

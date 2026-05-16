@@ -1,18 +1,17 @@
 import { type DataSource, IsNull, LessThanOrEqual, Or } from 'typeorm';
 import { Task, type TaskStatus } from '../entities';
 
-const NON_TERMINAL_TASK_STATUSES: readonly TaskStatus[] = ['queued', 'in_progress'];
+const TERMINAL_TASK_STATUSES: readonly TaskStatus[] = ['completed', 'failed'];
 
 export function createTaskRepository(dataSource: DataSource) {
   return dataSource.getRepository(Task).extend({
     /**
      * Finds the next runnable queued task. A task is runnable when its
-     * backoff has elapsed and every earlier step (lower stepNumber) in the
-     * same workflow is in a terminal state (completed or failed). This
-     * enforces the brief's "run only after preceding tasks complete" rule
-     * even when an earlier step is in retry-backoff. Eager-loads the
-     * workflow + sibling tasks so the sequencing filter can be applied in
-     * memory without a correlated subquery.
+     * backoff has elapsed and every dependency is in a terminal state
+     * (completed or failed). Empty-deps tasks are runnable as soon as
+     * their backoff elapses, since `[].every(...)` is vacuously true.
+     * Eager-loads workflow + dependencies so the filter can run in memory.
+     * FIFO ordering (createdAt ASC) is the tiebreaker among ready candidates.
      */
     async findNextRunnableTask(): Promise<Task | null> {
       const candidates = await this.find({
@@ -20,16 +19,12 @@ export function createTaskRepository(dataSource: DataSource) {
           status: 'queued',
           nextAttemptAt: Or(IsNull(), LessThanOrEqual(new Date())),
         },
-        relations: ['workflow', 'workflow.tasks'],
-        order: { stepNumber: 'ASC' },
+        relations: ['workflow', 'dependencies'],
+        order: { createdAt: 'ASC' },
       });
 
       const next = candidates.find((candidate) =>
-        candidate.workflow.tasks.every(
-          (sibling) =>
-            sibling.stepNumber >= candidate.stepNumber ||
-            !NON_TERMINAL_TASK_STATUSES.includes(sibling.status),
-        ),
+        candidate.dependencies.every((dep) => TERMINAL_TASK_STATUSES.includes(dep.status)),
       );
       return next ?? null;
     },

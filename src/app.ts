@@ -1,7 +1,7 @@
 import express, { type Express } from 'express';
 import { pinoHttp } from 'pino-http';
 import { logger } from './logger';
-import { analysisRoutes, healthRoute } from './routes';
+import { analysisRoutes, healthRoute, workflowRoutes } from './routes';
 
 const HTTP_SERVER_ERROR = 500;
 const HTTP_CLIENT_ERROR = 400;
@@ -47,6 +47,7 @@ export function createApp(): Express {
   app.use(express.json());
   app.use('/health', healthRoute);
   app.use('/analysis', analysisRoutes);
+  app.use('/workflow', workflowRoutes);
 
   return app;
 }

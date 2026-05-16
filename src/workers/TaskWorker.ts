@@ -1,14 +1,11 @@
 import { setTimeout as sleep } from 'node:timers/promises';
-import type { Task, TaskOutput, TaskType } from '../entities';
+import type { Task, TaskType } from '../entities';
 import { logger } from '../logger';
 import type { TaskRepository } from '../repositories';
 import type { JobFn } from './jobs';
+import { applyTaskOutcome, type TaskOutcome } from './taskOutcomePolicy';
 
 const DEFAULT_POLL_INTERVAL_MS = 5_000;
-const BACKOFF_BASE_DELAY_MS = 1_000;
-const BACKOFF_CAP_DELAY_MS = 5 * 60 * 1_000;
-
-type TaskOutcome = { kind: 'success'; output: TaskOutput } | { kind: 'failure'; error: Error };
 
 export interface TaskWorkerOptions {
   taskRepository: TaskRepository;
@@ -18,9 +15,9 @@ export interface TaskWorkerOptions {
 }
 
 /**
- * Background worker that polls for queued tasks and runs them. Encapsulates
- * the loop lifecycle (start/stop), handler dispatch, retry policy, and
- * persistence.
+ * Background worker that polls for queued tasks and runs them. Owns the loop
+ * lifecycle (start/stop), handler dispatch, persistence, and delegates the
+ * retry/result state transition to `applyTaskOutcome`.
  */
 export class TaskWorker {
   private readonly taskRepository: TaskRepository;
@@ -61,7 +58,13 @@ export class TaskWorker {
 
     taskLogger.info({ attempt: task.attemptCount }, 'task.started');
     const outcome = await this.runJob(task, this.handlers[task.type]);
-    const exhausted = this.applyOutcome(task, outcome, new Date());
+    const { exhausted } = applyTaskOutcome({
+      task,
+      outcome,
+      now: new Date(),
+      maxRetries: this.maxRetries,
+      randomFraction: Math.random(),
+    });
 
     if (outcome.kind === 'success') {
       taskLogger.info({ attempt: task.attemptCount }, 'task.completed');
@@ -103,43 +106,6 @@ export class TaskWorker {
         error: error instanceof Error ? error : new Error(String(error)),
       };
     }
-  }
-
-  private applyOutcome(task: Task, outcome: TaskOutcome, now: Date): boolean {
-    if (outcome.kind === 'success') {
-      task.output = outcome.output;
-      task.status = 'completed';
-      task.nextAttemptAt = null;
-      return false;
-    }
-
-    task.errorHistory = [
-      ...task.errorHistory,
-      { attemptedAt: now.toISOString(), error: outcome.error.message },
-    ];
-
-    const totalAllowedAttempts = this.maxRetries + 1;
-    if (task.attemptCount >= totalAllowedAttempts) {
-      task.status = 'failed';
-      task.nextAttemptAt = null;
-      return true;
-    }
-
-    task.status = 'queued';
-    task.nextAttemptAt = this.computeNextAttemptAt(task.attemptCount, now);
-    return false;
-  }
-
-  /**
-   * Exponential backoff with full jitter: schedules the next attempt at a
-   * uniformly random point between now and `min(cap, base * 2^(attemptCount - 1))`.
-   * Full jitter spreads load when many tasks fail simultaneously.
-   */
-  private computeNextAttemptAt(attemptCount: number, now: Date): Date {
-    const exponentialDelay = BACKOFF_BASE_DELAY_MS * 2 ** (attemptCount - 1);
-    const cappedDelay = Math.min(exponentialDelay, BACKOFF_CAP_DELAY_MS);
-    const jitteredDelay = Math.random() * cappedDelay;
-    return new Date(now.getTime() + jitteredDelay);
   }
 
   private async runLoop(): Promise<void> {

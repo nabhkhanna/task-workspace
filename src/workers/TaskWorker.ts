@@ -111,7 +111,7 @@ export class TaskWorker {
   private async runLoop(): Promise<void> {
     const { signal } = this.abortController;
     while (!signal.aborted) {
-      const task = await this.taskRepository.findNextQueued();
+      const task = await this.taskRepository.findNextRunnableTask();
       if (task) {
         try {
           await this.processNext(task);

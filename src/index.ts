@@ -5,7 +5,7 @@ import { AppDataSource } from './data-source';
 import { logger } from './logger';
 import { initRepositories, repositories } from './repositories';
 import { TaskWorker } from './workers';
-import { runAnalysis, runNotification, runPolygonArea } from './workers/jobs';
+import { runAnalysis, runNotification, runPolygonArea, runReportGeneration } from './workers/jobs';
 
 async function main(): Promise<void> {
   await AppDataSource.initialize();
@@ -24,6 +24,7 @@ async function main(): Promise<void> {
       analysis: runAnalysis,
       notification: runNotification,
       polygon_area: runPolygonArea,
+      report_generation: runReportGeneration(repositories.workflowRepository),
     },
     maxRetries: config.MAX_TASK_RETRIES,
   });

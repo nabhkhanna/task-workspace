@@ -63,11 +63,12 @@ describe('POST /analysis', () => {
     expect(workflow).not.toBeNull();
     expect(workflow?.clientId).toBe('acme');
     expect(workflow?.geoJson).toEqual(validGeoJson);
-    expect(workflow?.tasks).toHaveLength(3);
+    expect(workflow?.tasks).toHaveLength(4);
     expect(workflow?.tasks.map((t) => t.type).sort()).toEqual([
       'analysis',
       'notification',
       'polygon_area',
+      'report_generation',
     ]);
     expect(workflow?.tasks.every((t) => t.status === 'queued')).toBe(true);
     expect(workflow?.tasks.every((t) => t.attemptCount === 0)).toBe(true);

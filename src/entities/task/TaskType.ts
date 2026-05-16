@@ -1,4 +1,9 @@
-export const TASK_TYPES = ['analysis', 'notification', 'polygon_area'] as const;
+export const TASK_TYPES = [
+  'analysis',
+  'notification',
+  'polygon_area',
+  'report_generation',
+] as const;
 export type TaskType = (typeof TASK_TYPES)[number];
 
 export function isTaskType(value: string): value is TaskType {

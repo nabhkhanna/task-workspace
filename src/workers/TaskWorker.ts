@@ -12,18 +12,22 @@ export interface TaskWorkerOptions {
   handlers: Record<TaskType, JobFn>;
   maxRetries: number;
   pollIntervalMs?: number;
+  onTaskCompleted?: (workflowId: string) => Promise<void>;
 }
 
 /**
  * Background worker that polls for queued tasks and runs them. Owns the loop
  * lifecycle (start/stop), handler dispatch, persistence, and delegates the
- * retry/result state transition to `applyTaskOutcome`.
+ * retry/result state transition to `applyTaskOutcome`. Invokes an optional
+ * `onTaskCompleted` callback after a task reaches a terminal state so the
+ * composition root can react (e.g. finalize the parent workflow).
  */
 export class TaskWorker {
   private readonly taskRepository: TaskRepository;
   private readonly handlers: Record<TaskType, JobFn>;
   private readonly maxRetries: number;
   private readonly pollIntervalMs: number;
+  private readonly onTaskCompleted?: (workflowId: string) => Promise<void>;
   private readonly abortController = new AbortController();
   private loopPromise: Promise<void> | null = null;
 
@@ -32,6 +36,7 @@ export class TaskWorker {
     this.handlers = options.handlers;
     this.maxRetries = options.maxRetries;
     this.pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
+    this.onTaskCompleted = options.onTaskCompleted;
   }
 
   start(): Promise<void> {
@@ -68,11 +73,7 @@ export class TaskWorker {
 
     if (outcome.kind === 'success') {
       taskLogger.info({ attempt: task.attemptCount }, 'task.completed');
-      await this.taskRepository.save(task);
-      return;
-    }
-
-    if (exhausted) {
+    } else if (exhausted) {
       taskLogger.error(
         {
           err: outcome.error,
@@ -81,19 +82,27 @@ export class TaskWorker {
         },
         'task.retries_exhausted',
       );
-      await this.taskRepository.save(task);
-      throw outcome.error;
+    } else {
+      taskLogger.warn(
+        {
+          err: outcome.error,
+          attempt: task.attemptCount,
+          nextAttemptAt: task.nextAttemptAt,
+        },
+        'task.retry_scheduled',
+      );
     }
 
-    taskLogger.warn(
-      {
-        err: outcome.error,
-        attempt: task.attemptCount,
-        nextAttemptAt: task.nextAttemptAt,
-      },
-      'task.retry_scheduled',
-    );
     await this.taskRepository.save(task);
+
+    const isTerminal = outcome.kind === 'success' || exhausted;
+    if (isTerminal && this.onTaskCompleted) {
+      await this.onTaskCompleted(task.workflow.id);
+    }
+
+    if (outcome.kind === 'failure' && exhausted) {
+      throw outcome.error;
+    }
   }
 
   private async runJob(task: Task, job: JobFn): Promise<TaskOutcome> {

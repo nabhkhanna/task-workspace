@@ -4,9 +4,11 @@ import type { TaskType } from '../../src/entities';
 import {
   createTaskRepository,
   createWorkflowRepository,
+  initRepositories,
   type TaskRepository,
   type WorkflowRepository,
 } from '../../src/repositories';
+import { finalizeWorkflow } from '../../src/services/workflow-service';
 import { TaskWorker } from '../../src/workers';
 import type { JobFn } from '../../src/workers/jobs';
 import { createTestDataSource, makeTask, makeWorkflow } from '../_helpers';
@@ -50,6 +52,7 @@ describe('TaskWorker loop with real repository and test handlers', () => {
 
   beforeAll(async () => {
     dataSource = await createTestDataSource();
+    initRepositories(dataSource);
     taskRepository = createTaskRepository(dataSource);
     workflowRepository = createWorkflowRepository(dataSource);
   });
@@ -70,7 +73,7 @@ describe('TaskWorker loop with real repository and test handlers', () => {
     }
   });
 
-  it('processes a fan-in DAG to completion, respecting dependencies', async () => {
+  it('processes a fan-in DAG to completion and writes workflow.finalResult', async () => {
     const workflow = await workflowRepository.save(makeWorkflow({ clientId: 'loop' }));
     const analysis = makeTask({ workflow, type: 'analysis' });
     const polygon = makeTask({ workflow, type: 'polygon_area' });
@@ -86,11 +89,15 @@ describe('TaskWorker loop with real repository and test handlers', () => {
       handlers: TEST_HANDLERS,
       maxRetries: 0,
       pollIntervalMs: WORKER_POLL_INTERVAL_MS,
+      onTaskCompleted: finalizeWorkflow,
     });
     worker.start();
 
     await waitForCondition(
-      async () => (await taskRepository.count({ where: { status: 'completed' } })) === 4,
+      async () => {
+        const reloaded = await workflowRepository.findOneByOrFail({ id: workflow.id });
+        return reloaded.finalResult !== null;
+      },
       { timeoutMs: WAIT_TIMEOUT_MS, intervalMs: WAIT_POLL_INTERVAL_MS },
     );
 
@@ -125,6 +132,18 @@ describe('TaskWorker loop with real repository and test handlers', () => {
     expect(tasksByType.get('report_generation')?.updatedAt.getTime()).toBeLessThanOrEqual(
       tasksByType.get('notification')?.updatedAt.getTime() ?? 0,
     );
+
+    expect(persisted?.finalResult).not.toBeNull();
+    expect(persisted?.finalResult?.workflowId).toBe(workflow.id);
+    expect(persisted?.finalResult?.finalReport).toBe('Aggregated workflow results go here');
+    expect(persisted?.finalResult?.tasks).toHaveLength(4);
+    const finalTaskTypes = persisted?.finalResult?.tasks.map((t) => t.type).sort() ?? [];
+    expect(finalTaskTypes).toEqual([
+      'analysis',
+      'notification',
+      'polygon_area',
+      'report_generation',
+    ]);
   });
 
   it('does not pick up a task whose nextAttemptAt is still in the future', async () => {

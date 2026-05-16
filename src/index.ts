@@ -4,6 +4,7 @@ import { config } from './config';
 import { AppDataSource } from './data-source';
 import { logger } from './logger';
 import { initRepositories, repositories } from './repositories';
+import { finalizeWorkflow } from './services/workflow-service';
 import { TaskWorker } from './workers';
 import { runAnalysis, runNotification, runPolygonArea, runReportGeneration } from './workers/jobs';
 
@@ -24,9 +25,10 @@ async function main(): Promise<void> {
       analysis: runAnalysis,
       notification: runNotification,
       polygon_area: runPolygonArea,
-      report_generation: runReportGeneration(repositories.workflowRepository),
+      report_generation: runReportGeneration,
     },
     maxRetries: config.MAX_TASK_RETRIES,
+    onTaskCompleted: finalizeWorkflow,
   });
   const workerPromise = worker.start().catch((error) => {
     logger.error({ err: error }, 'worker.crashed');

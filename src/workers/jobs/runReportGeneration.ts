@@ -6,7 +6,7 @@ import type {
   TaskStatus,
   Workflow,
 } from '../../entities';
-import type { WorkflowRepository } from '../../repositories';
+import { repositories } from '../../repositories';
 import type { JobFn } from '.';
 
 const FINAL_REPORT_TEXT = 'Aggregated data and results';
@@ -44,15 +44,13 @@ function lastErrorOf(task: Task): string | undefined {
   return task.errorHistory[task.errorHistory.length - 1]?.error;
 }
 
-export function runReportGeneration(workflowRepository: WorkflowRepository): JobFn {
-  return async (task: Task): Promise<TaskOutput> => {
-    const workflow = await workflowRepository.findByIdWithTasks(task.workflow.id);
-    if (!workflow) {
-      throw new Error(`workflow ${task.workflow.id} not found`);
-    }
-    return {
-      type: 'report_generation',
-      report: buildReport(task, workflow),
-    };
+export const runReportGeneration: JobFn = async (task: Task): Promise<TaskOutput> => {
+  const workflow = await repositories.workflowRepository.findByIdWithTasks(task.workflow.id);
+  if (!workflow) {
+    throw new Error(`workflow ${task.workflow.id} not found`);
+  }
+  return {
+    type: 'report_generation',
+    report: buildReport(task, workflow),
   };
-}
+};

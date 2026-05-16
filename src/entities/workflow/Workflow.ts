@@ -2,6 +2,7 @@ import type { Feature, Polygon } from 'geojson';
 import { Column, Entity, OneToMany } from 'typeorm';
 import { AbstractBaseEntity } from '../AbstractBaseEntity';
 import { Task } from '../task';
+import type { WorkflowFinalResult } from './FinalResult';
 
 interface WorkflowInit {
   clientId: string;
@@ -16,6 +17,9 @@ export class Workflow extends AbstractBaseEntity {
   @Column({ type: 'simple-json' })
   readonly geoJson!: Feature<Polygon>;
 
+  @Column({ type: 'simple-json', nullable: true })
+  finalResult!: WorkflowFinalResult | null;
+
   @OneToMany(
     () => Task,
     (task) => task.workflow,
@@ -29,5 +33,6 @@ export class Workflow extends AbstractBaseEntity {
     }
     this.clientId = init.clientId;
     this.geoJson = init.geoJson;
+    this.finalResult = null;
   }
 }

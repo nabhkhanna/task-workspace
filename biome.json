@@ -7,7 +7,7 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["src/**", "!src/data", "migrations/**", "tests/**"]
+    "includes": ["src/**", "!src/data", "migrations/**", "scripts/**", "tests/**"]
   },
   "formatter": {
     "enabled": true,

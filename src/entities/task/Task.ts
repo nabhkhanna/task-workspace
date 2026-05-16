@@ -1,4 +1,4 @@
-import { Column, Entity, ManyToOne } from 'typeorm';
+import { Column, Entity, JoinTable, ManyToMany, ManyToOne } from 'typeorm';
 import { AbstractBaseEntity } from '../AbstractBaseEntity';
 import { Workflow } from '../workflow';
 import type { ErrorHistoryEntry } from './ErrorHistoryEntry';
@@ -8,8 +8,8 @@ import type { TaskType } from './TaskType';
 
 interface TaskInit {
   type: TaskType;
-  stepNumber: number;
   workflow: Workflow;
+  dependencies?: Task[];
 }
 
 @Entity({ name: 'tasks' })
@@ -19,9 +19,6 @@ export class Task extends AbstractBaseEntity {
 
   @Column({ type: 'varchar' })
   status!: TaskStatus;
-
-  @Column({ type: 'integer', default: 1 })
-  readonly stepNumber!: number;
 
   @Column({ type: 'simple-json', nullable: true })
   output!: TaskOutput | null;
@@ -41,18 +38,26 @@ export class Task extends AbstractBaseEntity {
   )
   readonly workflow!: Workflow;
 
+  @ManyToMany(() => Task)
+  @JoinTable({
+    name: 'task_dependencies',
+    joinColumn: { name: 'taskId', referencedColumnName: 'id' },
+    inverseJoinColumn: { name: 'dependsOnTaskId', referencedColumnName: 'id' },
+  })
+  dependencies!: Task[];
+
   constructor(init?: TaskInit) {
     super();
     if (!init) {
       return;
     }
     this.type = init.type;
-    this.stepNumber = init.stepNumber;
     this.workflow = init.workflow;
     this.status = 'queued';
     this.output = null;
     this.attemptCount = 0;
     this.nextAttemptAt = null;
     this.errorHistory = [];
+    this.dependencies = init.dependencies ?? [];
   }
 }

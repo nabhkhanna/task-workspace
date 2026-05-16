@@ -70,14 +70,16 @@ describe('TaskWorker loop with real repository and test handlers', () => {
     }
   });
 
-  it('picks up queued tasks, dispatches by type, and persists completed state', async () => {
+  it('processes a fan-in DAG to completion, respecting dependencies', async () => {
     const workflow = await workflowRepository.save(makeWorkflow({ clientId: 'loop' }));
-    await taskRepository.save([
-      makeTask({ workflow, type: 'analysis', stepNumber: 1 }),
-      makeTask({ workflow, type: 'polygon_area', stepNumber: 2 }),
-      makeTask({ workflow, type: 'notification', stepNumber: 3 }),
-      makeTask({ workflow, type: 'report_generation', stepNumber: 4 }),
-    ]);
+    const analysis = makeTask({ workflow, type: 'analysis' });
+    const polygon = makeTask({ workflow, type: 'polygon_area' });
+    const report = makeTask({ workflow, type: 'report_generation' });
+    const notification = makeTask({ workflow, type: 'notification' });
+    await taskRepository.save([analysis, polygon, report, notification]);
+    report.dependencies = [analysis, polygon];
+    notification.dependencies = [report];
+    await taskRepository.save([report, notification]);
 
     worker = new TaskWorker({
       taskRepository,
@@ -93,29 +95,36 @@ describe('TaskWorker loop with real repository and test handlers', () => {
     );
 
     const persisted = await workflowRepository.findByIdWithTasks(workflow.id);
-    const tasksByStep = [...(persisted?.tasks ?? [])].sort(
-      (a, b) => a.stepNumber - b.stepNumber,
-    );
+    const tasksByType = new Map((persisted?.tasks ?? []).map((t) => [t.type, t]));
 
-    expect(tasksByStep).toHaveLength(4);
-    expect(tasksByStep[0].status).toBe('completed');
-    expect(tasksByStep[0].output).toEqual({ type: 'analysis', country: 'Testlandia' });
-    expect(tasksByStep[0].attemptCount).toBe(1);
-
-    expect(tasksByStep[1].status).toBe('completed');
-    expect(tasksByStep[1].output).toEqual({ type: 'polygon_area', areaM2: 999 });
-    expect(tasksByStep[1].attemptCount).toBe(1);
-
-    expect(tasksByStep[2].status).toBe('completed');
-    expect(tasksByStep[2].output).toEqual({ type: 'notification' });
-    expect(tasksByStep[2].attemptCount).toBe(1);
-
-    expect(tasksByStep[3].status).toBe('completed');
-    expect(tasksByStep[3].output).toEqual({
+    expect(persisted?.tasks).toHaveLength(4);
+    expect(tasksByType.get('analysis')?.status).toBe('completed');
+    expect(tasksByType.get('analysis')?.output).toEqual({
+      type: 'analysis',
+      country: 'Testlandia',
+    });
+    expect(tasksByType.get('polygon_area')?.status).toBe('completed');
+    expect(tasksByType.get('polygon_area')?.output).toEqual({
+      type: 'polygon_area',
+      areaM2: 999,
+    });
+    expect(tasksByType.get('report_generation')?.status).toBe('completed');
+    expect(tasksByType.get('report_generation')?.output).toEqual({
       type: 'report_generation',
       report: { workflowId: workflow.id, tasks: [], finalReport: 'test stub' },
     });
-    expect(tasksByStep[3].attemptCount).toBe(1);
+    expect(tasksByType.get('notification')?.status).toBe('completed');
+    expect(tasksByType.get('notification')?.output).toEqual({ type: 'notification' });
+
+    expect(tasksByType.get('analysis')?.updatedAt.getTime()).toBeLessThanOrEqual(
+      tasksByType.get('report_generation')?.updatedAt.getTime() ?? 0,
+    );
+    expect(tasksByType.get('polygon_area')?.updatedAt.getTime()).toBeLessThanOrEqual(
+      tasksByType.get('report_generation')?.updatedAt.getTime() ?? 0,
+    );
+    expect(tasksByType.get('report_generation')?.updatedAt.getTime()).toBeLessThanOrEqual(
+      tasksByType.get('notification')?.updatedAt.getTime() ?? 0,
+    );
   });
 
   it('does not pick up a task whose nextAttemptAt is still in the future', async () => {
@@ -124,7 +133,6 @@ describe('TaskWorker loop with real repository and test handlers', () => {
       makeTask({
         workflow,
         type: 'analysis',
-        stepNumber: 1,
         nextAttemptAt: new Date(Date.now() + NEXT_ATTEMPT_FAR_FUTURE_MS),
       }),
     );

@@ -1,18 +1,9 @@
 import * as fs from 'node:fs';
+import type { Feature, Polygon } from 'geojson';
 import * as yaml from 'js-yaml';
-import { z } from 'zod';
 import { Task, Workflow } from '../../entities';
 import type { TaskRepository, WorkflowRepository } from '../../repositories';
 import { validateWorkflowDefinition, WorkflowDefinitionSchema } from './workflowValidation';
-
-const GeoJsonPolygonSchema = z.object({
-  type: z.literal('Feature'),
-  geometry: z.object({
-    type: z.literal('Polygon'),
-    coordinates: z.array(z.array(z.tuple([z.number(), z.number()]).rest(z.number()))),
-  }),
-  properties: z.record(z.string(), z.unknown()).nullable(),
-});
 
 export interface WorkflowServiceDeps {
   workflowRepository: WorkflowRepository;
@@ -20,7 +11,7 @@ export interface WorkflowServiceDeps {
 }
 
 export interface WorkflowService {
-  createFromYaml(filePath: string, clientId: string, geoJson: unknown): Promise<Workflow>;
+  createFromYaml(filePath: string, clientId: string, geoJson: Feature<Polygon>): Promise<Workflow>;
 }
 
 export function createWorkflowService(deps: WorkflowServiceDeps): WorkflowService {
@@ -28,12 +19,6 @@ export function createWorkflowService(deps: WorkflowServiceDeps): WorkflowServic
 
   return {
     async createFromYaml(filePath, clientId, geoJson) {
-      const parseResult = GeoJsonPolygonSchema.safeParse(geoJson);
-      if (!parseResult.success) {
-        throw new Error(`Invalid geoJson input: ${parseResult.error.message}`);
-      }
-      const validatedGeoJson = parseResult.data;
-
       const fileContent = fs.readFileSync(filePath, 'utf8');
       const yamlData = yaml.load(fileContent);
       const defResult = WorkflowDefinitionSchema.safeParse(yamlData);
@@ -44,7 +29,7 @@ export function createWorkflowService(deps: WorkflowServiceDeps): WorkflowServic
 
       validateWorkflowDefinition(workflowDef);
 
-      const workflow = new Workflow({ clientId, geoJson: validatedGeoJson });
+      const workflow = new Workflow({ clientId, geoJson });
       const savedWorkflow = await workflowRepository.save(workflow);
 
       const tasksByType = new Map<string, Task>();

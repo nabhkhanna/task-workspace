@@ -3,7 +3,39 @@ import {
   findCycle,
   validateWorkflowDefinition,
   type WorkflowDefinition,
+  WorkflowDefinitionSchema,
 } from '../../src/services/workflow-service/workflowValidation';
+
+describe('WorkflowDefinitionSchema', () => {
+  it('accepts a valid definition and returns typed data', () => {
+    const result = WorkflowDefinitionSchema.safeParse({
+      name: 'ok',
+      steps: [{ taskType: 'analysis' }],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects an unknown taskType (caught at parse time, not semantic validation)', () => {
+    const result = WorkflowDefinitionSchema.safeParse({
+      name: 'unknown',
+      steps: [{ taskType: 'not_a_real_type' }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a missing steps field', () => {
+    const result = WorkflowDefinitionSchema.safeParse({ name: 'no-steps' });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects an unknown taskType inside dependsOn', () => {
+    const result = WorkflowDefinitionSchema.safeParse({
+      name: 'bad-dep',
+      steps: [{ taskType: 'analysis', dependsOn: ['not_a_real_type'] }],
+    });
+    expect(result.success).toBe(false);
+  });
+});
 
 describe('validateWorkflowDefinition', () => {
   it('accepts a valid linear-chain workflow', () => {
@@ -28,14 +60,6 @@ describe('validateWorkflowDefinition', () => {
       ],
     };
     expect(() => validateWorkflowDefinition(def)).not.toThrow();
-  });
-
-  it('rejects an unknown task type', () => {
-    const def: WorkflowDefinition = {
-      name: 'unknown',
-      steps: [{ taskType: 'not_a_real_type' }],
-    };
-    expect(() => validateWorkflowDefinition(def)).toThrow(/Unknown task type/);
   });
 
   it('rejects a duplicate task type within the workflow', () => {

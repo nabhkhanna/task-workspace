@@ -1,3 +1,4 @@
+import type { IncomingMessage } from 'node:http';
 import express, { type Express, type Router } from 'express';
 import { pinoHttp } from 'pino-http';
 import { logger } from './logger';
@@ -11,6 +12,19 @@ export interface AppRoutes {
   workflowRoutes: Router;
 }
 
+/**
+ * pino-http types `req` as Node's `IncomingMessage`, but at runtime Express
+ * augments it with `originalUrl`. Use an `in` check to narrow without an
+ * `as` cast and fall back to `req.url` if the request never went through
+ * the Express router.
+ */
+function urlOf(req: IncomingMessage): string {
+  if ('originalUrl' in req && typeof req.originalUrl === 'string') {
+    return req.originalUrl;
+  }
+  return req.url ?? '';
+}
+
 export function createApp(routes: AppRoutes): Express {
   const app = express();
 
@@ -18,14 +32,11 @@ export function createApp(routes: AppRoutes): Express {
     pinoHttp({
       logger,
       serializers: {
-        req: (req) => {
-          const withOriginal = req as typeof req & { originalUrl?: string };
-          return {
-            id: req.id,
-            method: req.method,
-            url: withOriginal.originalUrl ?? req.url,
-          };
-        },
+        req: (req) => ({
+          id: req.id,
+          method: req.method,
+          url: urlOf(req),
+        }),
         res: (res) => ({ statusCode: res.statusCode }),
       },
       customLogLevel: (_req, res, err) => {
@@ -37,16 +48,9 @@ export function createApp(routes: AppRoutes): Express {
         }
         return 'info';
       },
-      customSuccessMessage: (req, res, responseTime) => {
-        const withOriginal = req as typeof req & { originalUrl?: string };
-        const url = withOriginal.originalUrl ?? req.url;
-        return `${req.method} ${url} ${res.statusCode} (${responseTime}ms)`;
-      },
-      customErrorMessage: (req, res) => {
-        const withOriginal = req as typeof req & { originalUrl?: string };
-        const url = withOriginal.originalUrl ?? req.url;
-        return `${req.method} ${url} ${res.statusCode}`;
-      },
+      customSuccessMessage: (req, res, responseTime) =>
+        `${req.method} ${urlOf(req)} ${res.statusCode} (${responseTime}ms)`,
+      customErrorMessage: (req, res) => `${req.method} ${urlOf(req)} ${res.statusCode}`,
     }),
   );
   app.use(express.json());

@@ -16,21 +16,37 @@ import {
 import { createWorkflowService } from '../../src/services';
 import { createTestDataSource } from '../_helpers';
 
+const germanyRingCoords = [
+  [10.4, 51.1],
+  [10.5, 51.1],
+  [10.5, 51.2],
+  [10.4, 51.2],
+  [10.4, 51.1],
+];
+
 const validGeoJson = {
   type: 'Feature' as const,
   geometry: {
     type: 'Polygon' as const,
-    coordinates: [
-      [
-        [10.4, 51.1],
-        [10.5, 51.1],
-        [10.5, 51.2],
-        [10.4, 51.2],
-        [10.4, 51.1],
-      ],
-    ],
+    coordinates: [germanyRingCoords],
   },
   properties: {},
+};
+
+const validBarePolygon = {
+  type: 'Polygon' as const,
+  coordinates: [germanyRingCoords],
+};
+
+const validBareMultiPolygon = {
+  type: 'MultiPolygon' as const,
+  coordinates: [[germanyRingCoords]],
+};
+
+const validMultiPolygonFeature = {
+  type: 'Feature' as const,
+  geometry: validBareMultiPolygon,
+  properties: { name: 'archipelago' },
 };
 
 describe('POST /analysis', () => {
@@ -83,12 +99,41 @@ describe('POST /analysis', () => {
     expect(workflow?.tasks.every((t) => t.attemptCount === 0)).toBe(true);
   });
 
-  it('rejects geoJson that is not a Polygon Feature', async () => {
+  it('accepts a bare Polygon and normalizes to Feature for storage', async () => {
+    const response = await request(app)
+      .post('/analysis')
+      .send({ clientId: 'acme', geoJson: validBarePolygon });
+
+    expect(response.status).toBe(202);
+    const workflow = await workflowRepository.findByIdWithTasks(response.body.workflowId);
+    expect(workflow?.geoJson.type).toBe('Feature');
+    expect(workflow?.geoJson.geometry.type).toBe('Polygon');
+  });
+
+  it('rejects a bare MultiPolygon — endpoint is polygon-only by design', async () => {
+    const response = await request(app)
+      .post('/analysis')
+      .send({ clientId: 'acme', geoJson: validBareMultiPolygon });
+
+    expect(response.status).toBe(400);
+    expect(await workflowRepository.count()).toBe(0);
+  });
+
+  it('rejects a Feature wrapping a MultiPolygon', async () => {
+    const response = await request(app)
+      .post('/analysis')
+      .send({ clientId: 'acme', geoJson: validMultiPolygonFeature });
+
+    expect(response.status).toBe(400);
+    expect(await workflowRepository.count()).toBe(0);
+  });
+
+  it('rejects geoJson that is not any known type', async () => {
     const response = await request(app)
       .post('/analysis')
       .send({ clientId: 'acme', geoJson: { type: 'NotAFeature' } });
 
-    expect(response.status).toBe(500);
+    expect(response.status).toBe(400);
     expect(await workflowRepository.count()).toBe(0);
   });
 
@@ -97,8 +142,26 @@ describe('POST /analysis', () => {
       .post('/analysis')
       .send({ clientId: 'acme', geoJson: { type: 'Feature', properties: {} } });
 
-    expect(response.status).toBe(500);
+    expect(response.status).toBe(400);
     expect(await taskRepository.count()).toBe(0);
+  });
+
+  it('rejects a missing clientId at the boundary', async () => {
+    const response = await request(app)
+      .post('/analysis')
+      .send({ geoJson: validGeoJson });
+
+    expect(response.status).toBe(400);
+    expect(await workflowRepository.count()).toBe(0);
+  });
+
+  it('rejects a non-string clientId at the boundary', async () => {
+    const response = await request(app)
+      .post('/analysis')
+      .send({ clientId: 42, geoJson: validGeoJson });
+
+    expect(response.status).toBe(400);
+    expect(await workflowRepository.count()).toBe(0);
   });
 
   it('persists the workflow even before the worker has run any task', async () => {

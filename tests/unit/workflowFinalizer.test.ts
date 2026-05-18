@@ -84,45 +84,16 @@ describe('buildFinalResult', () => {
     expect('error' in result.tasks[1]).toBe(false);
   });
 
-  it('includes the report_generation task itself (nested report payload)', () => {
+  it('includes the report_generation task like any other (no type filtering)', () => {
     const workflow = makeWorkflow({ id: 'wf-4' });
-    const analysis = makeTask({
-      id: 'task-analysis',
-      workflow,
-      type: 'analysis',
-      status: 'completed',
-      output: { type: 'analysis', country: 'Germany' },
-    });
-    const reportTask = makeTask({
-      id: 'task-report',
-      workflow,
-      type: 'report_generation',
-      status: 'completed',
-      output: {
-        type: 'report_generation',
-        report: {
-          workflowId: 'wf-4',
-          tasks: [
-            {
-              taskId: 'task-analysis',
-              type: 'analysis',
-              output: { type: 'analysis', country: 'Germany' },
-            },
-          ],
-          finalReport: 'Aggregated data and results',
-        },
-      },
-    });
-    workflow.tasks = [analysis, reportTask];
+    workflow.tasks = [
+      makeTask({ workflow, type: 'analysis', status: 'completed' }),
+      makeTask({ workflow, type: 'report_generation', status: 'completed' }),
+    ];
 
     const result = buildFinalResult(workflow);
 
-    expect(result.tasks).toHaveLength(2);
-    expect(result.tasks[1].taskId).toBe('task-report');
-    expect(result.tasks[1].output?.type).toBe('report_generation');
-    if (result.tasks[1].output?.type === 'report_generation') {
-      expect(result.tasks[1].output.report.tasks).toHaveLength(1);
-    }
+    expect(result.tasks.map((t) => t.type)).toEqual(['analysis', 'report_generation']);
   });
 
   it('handles an empty workflow (no tasks)', () => {

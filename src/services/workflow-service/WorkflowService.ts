@@ -1,9 +1,9 @@
 import * as fs from 'node:fs';
 import * as yaml from 'js-yaml';
 import { z } from 'zod';
-import { Task, type TaskType, Workflow } from '../../entities';
+import { Task, Workflow } from '../../entities';
 import type { TaskRepository, WorkflowRepository } from '../../repositories';
-import { validateWorkflowDefinition, type WorkflowDefinition } from './workflowValidation';
+import { validateWorkflowDefinition, WorkflowDefinitionSchema } from './workflowValidation';
 
 const GeoJsonPolygonSchema = z.object({
   type: z.literal('Feature'),
@@ -35,7 +35,12 @@ export function createWorkflowService(deps: WorkflowServiceDeps): WorkflowServic
       const validatedGeoJson = parseResult.data;
 
       const fileContent = fs.readFileSync(filePath, 'utf8');
-      const workflowDef = yaml.load(fileContent) as WorkflowDefinition;
+      const yamlData = yaml.load(fileContent);
+      const defResult = WorkflowDefinitionSchema.safeParse(yamlData);
+      if (!defResult.success) {
+        throw new Error(`Invalid workflow definition: ${defResult.error.message}`);
+      }
+      const workflowDef = defResult.data;
 
       validateWorkflowDefinition(workflowDef);
 
@@ -44,10 +49,7 @@ export function createWorkflowService(deps: WorkflowServiceDeps): WorkflowServic
 
       const tasksByType = new Map<string, Task>();
       for (const step of workflowDef.steps) {
-        tasksByType.set(
-          step.taskType,
-          new Task({ type: step.taskType as TaskType, workflow: savedWorkflow }),
-        );
+        tasksByType.set(step.taskType, new Task({ type: step.taskType, workflow: savedWorkflow }));
       }
       const tasks = [...tasksByType.values()];
       await taskRepository.save(tasks);

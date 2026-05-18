@@ -1,18 +1,23 @@
-import { isTaskType } from '../../entities';
+import { z } from 'zod';
+import { TASK_TYPES } from '../../entities';
 
-export interface WorkflowStep {
-  taskType: string;
-  dependsOn?: string[];
-}
+const WorkflowStepSchema = z.object({
+  taskType: z.enum(TASK_TYPES),
+  dependsOn: z.array(z.enum(TASK_TYPES)).optional(),
+});
 
-export interface WorkflowDefinition {
-  name: string;
-  steps: WorkflowStep[];
-}
+export const WorkflowDefinitionSchema = z.object({
+  name: z.string(),
+  steps: z.array(WorkflowStepSchema),
+});
+
+export type WorkflowStep = z.infer<typeof WorkflowStepSchema>;
+export type WorkflowDefinition = z.infer<typeof WorkflowDefinitionSchema>;
 
 /**
- * Validates the workflow's task graph before any DB writes:
- *   - all taskTypes are known
+ * Validates the workflow's task graph after the schema has already enforced
+ * shape and taskType-enum constraints. Catches semantic problems the schema
+ * can't express:
  *   - taskTypes are unique within the workflow (used as the dependency identifier)
  *   - every dependsOn ref resolves to a step in this workflow
  *   - no task depends on itself
@@ -20,13 +25,6 @@ export interface WorkflowDefinition {
  * Throws a clear Error on the first problem found. Pure — no I/O.
  */
 export function validateWorkflowDefinition(definition: WorkflowDefinition): void {
-  const unknownTypes = definition.steps
-    .map((step) => step.taskType)
-    .filter((taskType) => !isTaskType(taskType));
-  if (unknownTypes.length > 0) {
-    throw new Error(`Unknown task type(s) in workflow: ${unknownTypes.join(', ')}`);
-  }
-
   const seenTypes = new Set<string>();
   for (const step of definition.steps) {
     if (seenTypes.has(step.taskType)) {

@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as yaml from 'js-yaml';
 import { z } from 'zod';
 import { Task, type TaskType, Workflow } from '../../entities';
-import { repositories } from '../../repositories';
+import type { TaskRepository, WorkflowRepository } from '../../repositories';
 import { validateWorkflowDefinition, type WorkflowDefinition } from './workflowValidation';
 
 const GeoJsonPolygonSchema = z.object({
@@ -14,51 +14,60 @@ const GeoJsonPolygonSchema = z.object({
   properties: z.record(z.string(), z.unknown()).nullable(),
 });
 
-export class WorkflowService {
-  /**
-   * Creates a workflow from a YAML definition, persists it, and queues
-   * the associated tasks with their dependsOn relationships wired up.
-   */
-  async createFromYaml(filePath: string, clientId: string, geoJson: unknown): Promise<Workflow> {
-    const parseResult = GeoJsonPolygonSchema.safeParse(geoJson);
-    if (!parseResult.success) {
-      throw new Error(`Invalid geoJson input: ${parseResult.error.message}`);
-    }
-    const validatedGeoJson = parseResult.data;
+export interface WorkflowServiceDeps {
+  workflowRepository: WorkflowRepository;
+  taskRepository: TaskRepository;
+}
 
-    const fileContent = fs.readFileSync(filePath, 'utf8');
-    const workflowDef = yaml.load(fileContent) as WorkflowDefinition;
+export interface WorkflowService {
+  createFromYaml(filePath: string, clientId: string, geoJson: unknown): Promise<Workflow>;
+}
 
-    validateWorkflowDefinition(workflowDef);
+export function createWorkflowService(deps: WorkflowServiceDeps): WorkflowService {
+  const { workflowRepository, taskRepository } = deps;
 
-    const workflow = new Workflow({ clientId, geoJson: validatedGeoJson });
-    const savedWorkflow = await repositories.workflowRepository.save(workflow);
-
-    const tasksByType = new Map<string, Task>();
-    for (const step of workflowDef.steps) {
-      tasksByType.set(
-        step.taskType,
-        new Task({ type: step.taskType as TaskType, workflow: savedWorkflow }),
-      );
-    }
-    const tasks = [...tasksByType.values()];
-    await repositories.taskRepository.save(tasks);
-
-    for (const step of workflowDef.steps) {
-      const task = tasksByType.get(step.taskType);
-      if (!task) {
-        continue;
+  return {
+    async createFromYaml(filePath, clientId, geoJson) {
+      const parseResult = GeoJsonPolygonSchema.safeParse(geoJson);
+      if (!parseResult.success) {
+        throw new Error(`Invalid geoJson input: ${parseResult.error.message}`);
       }
-      task.dependencies = (step.dependsOn ?? []).map((depType) => {
-        const dep = tasksByType.get(depType);
-        if (!dep) {
-          throw new Error(`Unknown dependency: ${depType}`);
-        }
-        return dep;
-      });
-    }
-    await repositories.taskRepository.save(tasks);
+      const validatedGeoJson = parseResult.data;
 
-    return savedWorkflow;
-  }
+      const fileContent = fs.readFileSync(filePath, 'utf8');
+      const workflowDef = yaml.load(fileContent) as WorkflowDefinition;
+
+      validateWorkflowDefinition(workflowDef);
+
+      const workflow = new Workflow({ clientId, geoJson: validatedGeoJson });
+      const savedWorkflow = await workflowRepository.save(workflow);
+
+      const tasksByType = new Map<string, Task>();
+      for (const step of workflowDef.steps) {
+        tasksByType.set(
+          step.taskType,
+          new Task({ type: step.taskType as TaskType, workflow: savedWorkflow }),
+        );
+      }
+      const tasks = [...tasksByType.values()];
+      await taskRepository.save(tasks);
+
+      for (const step of workflowDef.steps) {
+        const task = tasksByType.get(step.taskType);
+        if (!task) {
+          continue;
+        }
+        task.dependencies = (step.dependsOn ?? []).map((depType) => {
+          const dep = tasksByType.get(depType);
+          if (!dep) {
+            throw new Error(`Unknown dependency: ${depType}`);
+          }
+          return dep;
+        });
+      }
+      await taskRepository.save(tasks);
+
+      return savedWorkflow;
+    },
+  };
 }

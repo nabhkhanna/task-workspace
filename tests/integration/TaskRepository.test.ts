@@ -11,7 +11,7 @@ import { createTestDataSource, makeTask, makeWorkflow } from '../_helpers';
 const FUTURE_OFFSET_MS = 60_000;
 const PAST_OFFSET_MS = 60_000;
 
-describe('TaskRepository.findNextRunnableTask', () => {
+describe('TaskRepository.findNextRunnable', () => {
   let dataSource: DataSource;
   let taskRepository: TaskRepository;
   let workflowRepository: WorkflowRepository;
@@ -37,14 +37,14 @@ describe('TaskRepository.findNextRunnableTask', () => {
       makeTask({ workflow, type: 'analysis', status: 'completed' }),
     );
 
-    expect(await taskRepository.findNextRunnableTask()).toBeNull();
+    expect(await taskRepository.findNextRunnable()).toBeNull();
   });
 
   it('returns a task that has no dependencies', async () => {
     const workflow = await workflowRepository.save(makeWorkflow({ clientId: 'no-deps' }));
     await taskRepository.save(makeTask({ workflow, type: 'analysis' }));
 
-    const next = await taskRepository.findNextRunnableTask();
+    const next = await taskRepository.findNextRunnable();
 
     expect(next?.type).toBe('analysis');
   });
@@ -59,7 +59,7 @@ describe('TaskRepository.findNextRunnableTask', () => {
       }),
     );
 
-    expect(await taskRepository.findNextRunnableTask()).toBeNull();
+    expect(await taskRepository.findNextRunnable()).toBeNull();
   });
 
   it('returns a task once its nextAttemptAt has passed', async () => {
@@ -72,7 +72,7 @@ describe('TaskRepository.findNextRunnableTask', () => {
       }),
     );
 
-    const next = await taskRepository.findNextRunnableTask();
+    const next = await taskRepository.findNextRunnable();
     expect(next?.type).toBe('analysis');
   });
 
@@ -84,8 +84,8 @@ describe('TaskRepository.findNextRunnableTask', () => {
     dependent.dependencies = [dependency];
     await taskRepository.save([dependent]);
 
-    expect(await taskRepository.findNextRunnableTask()).not.toBeNull();
-    const next = await taskRepository.findNextRunnableTask();
+    expect(await taskRepository.findNextRunnable()).not.toBeNull();
+    const next = await taskRepository.findNextRunnable();
     expect(next?.id).toBe(dependency.id);
   });
 
@@ -97,7 +97,7 @@ describe('TaskRepository.findNextRunnableTask', () => {
     dependent.dependencies = [dependency];
     await taskRepository.save([dependent]);
 
-    const next = await taskRepository.findNextRunnableTask();
+    const next = await taskRepository.findNextRunnable();
     expect(next).toBeNull();
   });
 
@@ -109,7 +109,7 @@ describe('TaskRepository.findNextRunnableTask', () => {
     dependent.dependencies = [dependency];
     await taskRepository.save([dependent]);
 
-    const next = await taskRepository.findNextRunnableTask();
+    const next = await taskRepository.findNextRunnable();
     expect(next?.id).toBe(dependent.id);
   });
 
@@ -121,7 +121,7 @@ describe('TaskRepository.findNextRunnableTask', () => {
     dependent.dependencies = [dependency];
     await taskRepository.save([dependent]);
 
-    const next = await taskRepository.findNextRunnableTask();
+    const next = await taskRepository.findNextRunnable();
     expect(next?.id).toBe(dependent.id);
   });
 
@@ -134,7 +134,7 @@ describe('TaskRepository.findNextRunnableTask', () => {
     dependent.dependencies = [doneDep, stillRunningDep];
     await taskRepository.save([dependent]);
 
-    const next = await taskRepository.findNextRunnableTask();
+    const next = await taskRepository.findNextRunnable();
     expect(next?.id).toBe(stillRunningDep.id);
   });
 });

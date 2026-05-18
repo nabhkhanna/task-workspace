@@ -1,3 +1,3 @@
-export { default as analysisRoutes } from './analysisRoutes';
+export { createAnalysisRoutes } from './analysisRoutes';
 export { default as healthRoute } from './healthRoute';
-export { default as workflowRoutes } from './workflowRoutes';
+export { createWorkflowRoutes } from './workflowRoutes';

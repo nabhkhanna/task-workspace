@@ -5,10 +5,15 @@ import { createApp } from '../../src/app';
 import {
   createTaskRepository,
   createWorkflowRepository,
-  initRepositories,
   type TaskRepository,
   type WorkflowRepository,
 } from '../../src/repositories';
+import {
+  createAnalysisRoutes,
+  createWorkflowRoutes,
+  healthRoute,
+} from '../../src/routes';
+import { createWorkflowService } from '../../src/services';
 import { createTestDataSource, makeTask, makeWorkflow } from '../_helpers';
 
 describe('GET /workflow/:id/status', () => {
@@ -19,10 +24,14 @@ describe('GET /workflow/:id/status', () => {
 
   beforeAll(async () => {
     dataSource = await createTestDataSource();
-    initRepositories(dataSource);
     taskRepository = createTaskRepository(dataSource);
     workflowRepository = createWorkflowRepository(dataSource);
-    app = createApp();
+    const workflowService = createWorkflowService({ workflowRepository, taskRepository });
+    app = createApp({
+      healthRoute,
+      analysisRoutes: createAnalysisRoutes(workflowService),
+      workflowRoutes: createWorkflowRoutes(workflowRepository),
+    });
   });
 
   afterAll(async () => {

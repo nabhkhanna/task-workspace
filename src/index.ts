@@ -3,24 +3,34 @@ import { createApp } from './app';
 import { config } from './config';
 import { AppDataSource } from './data-source';
 import { logger } from './logger';
-import { initRepositories, repositories } from './repositories';
-import { finalizeWorkflow } from './services/workflow-service';
+import { createTaskRepository, createWorkflowRepository } from './repositories';
+import { createAnalysisRoutes, createWorkflowRoutes, healthRoute } from './routes';
+import { createFinalizeWorkflow, createWorkflowService } from './services';
 import { TaskWorker } from './workers';
 import { runAnalysis, runNotification, runPolygonArea, runReportGeneration } from './workers/jobs';
 
 async function main(): Promise<void> {
   await AppDataSource.initialize();
-  initRepositories(AppDataSource);
 
-  const requeuedCount = await repositories.taskRepository.requeueInProgress();
+  const taskRepository = createTaskRepository(AppDataSource);
+  const workflowRepository = createWorkflowRepository(AppDataSource);
+
+  const requeuedCount = await taskRepository.requeueInterrupted();
   if (requeuedCount > 0) {
     logger.warn({ count: requeuedCount }, 'startup.requeued_interrupted_tasks');
   }
 
-  const app = createApp();
+  const workflowService = createWorkflowService({ workflowRepository, taskRepository });
+  const finalizeWorkflow = createFinalizeWorkflow(workflowRepository);
+
+  const app = createApp({
+    healthRoute,
+    analysisRoutes: createAnalysisRoutes(workflowService),
+    workflowRoutes: createWorkflowRoutes(workflowRepository),
+  });
 
   const worker = new TaskWorker({
-    taskRepository: repositories.taskRepository,
+    taskStore: taskRepository,
     handlers: {
       analysis: runAnalysis,
       notification: runNotification,

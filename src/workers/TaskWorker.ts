@@ -1,14 +1,14 @@
 import { setTimeout as sleep } from 'node:timers/promises';
 import type { Task, TaskType } from '../entities';
 import { logger } from '../logger';
-import type { TaskRepository } from '../repositories';
 import type { JobFn } from './jobs';
+import type { TaskStore } from './TaskStore';
 import { applyTaskOutcome, type TaskOutcome } from './taskOutcomePolicy';
 
 const DEFAULT_POLL_INTERVAL_MS = 5_000;
 
 export interface TaskWorkerOptions {
-  taskRepository: TaskRepository;
+  taskStore: TaskStore;
   handlers: Record<TaskType, JobFn>;
   maxRetries: number;
   pollIntervalMs?: number;
@@ -23,7 +23,7 @@ export interface TaskWorkerOptions {
  * composition root can react (e.g. finalize the parent workflow).
  */
 export class TaskWorker {
-  private readonly taskRepository: TaskRepository;
+  private readonly taskStore: TaskStore;
   private readonly handlers: Record<TaskType, JobFn>;
   private readonly maxRetries: number;
   private readonly pollIntervalMs: number;
@@ -32,7 +32,7 @@ export class TaskWorker {
   private loopPromise: Promise<void> | null = null;
 
   constructor(options: TaskWorkerOptions) {
-    this.taskRepository = options.taskRepository;
+    this.taskStore = options.taskStore;
     this.handlers = options.handlers;
     this.maxRetries = options.maxRetries;
     this.pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
@@ -59,7 +59,7 @@ export class TaskWorker {
 
     task.attemptCount += 1;
     task.status = 'in_progress';
-    await this.taskRepository.save(task);
+    await this.taskStore.save(task);
 
     taskLogger.info({ attempt: task.attemptCount }, 'task.started');
     const outcome = await this.runJob(task, this.handlers[task.type]);
@@ -93,7 +93,7 @@ export class TaskWorker {
       );
     }
 
-    await this.taskRepository.save(task);
+    await this.taskStore.save(task);
 
     const isTerminal = outcome.kind === 'success' || exhausted;
     if (isTerminal && this.onTaskCompleted) {
@@ -120,7 +120,7 @@ export class TaskWorker {
   private async runLoop(): Promise<void> {
     const { signal } = this.abortController;
     while (!signal.aborted) {
-      const task = await this.taskRepository.findNextRunnableTask();
+      const task = await this.taskStore.findNextRunnable();
       if (task) {
         try {
           await this.processNext(task);

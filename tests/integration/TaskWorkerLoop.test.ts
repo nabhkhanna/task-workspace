@@ -4,11 +4,10 @@ import type { TaskType } from '../../src/entities';
 import {
   createTaskRepository,
   createWorkflowRepository,
-  initRepositories,
   type TaskRepository,
   type WorkflowRepository,
 } from '../../src/repositories';
-import { finalizeWorkflow } from '../../src/services/workflow-service';
+import { createFinalizeWorkflow } from '../../src/services';
 import { TaskWorker } from '../../src/workers';
 import type { JobFn } from '../../src/workers/jobs';
 import { createTestDataSource, makeTask, makeWorkflow } from '../_helpers';
@@ -52,7 +51,6 @@ describe('TaskWorker loop with real repository and test handlers', () => {
 
   beforeAll(async () => {
     dataSource = await createTestDataSource();
-    initRepositories(dataSource);
     taskRepository = createTaskRepository(dataSource);
     workflowRepository = createWorkflowRepository(dataSource);
   });
@@ -85,11 +83,11 @@ describe('TaskWorker loop with real repository and test handlers', () => {
     await taskRepository.save([report, notification]);
 
     worker = new TaskWorker({
-      taskRepository,
+      taskStore: taskRepository,
       handlers: TEST_HANDLERS,
       maxRetries: 0,
       pollIntervalMs: WORKER_POLL_INTERVAL_MS,
-      onTaskCompleted: finalizeWorkflow,
+      onTaskCompleted: createFinalizeWorkflow(workflowRepository),
     });
     worker.start();
 
@@ -157,7 +155,7 @@ describe('TaskWorker loop with real repository and test handlers', () => {
     );
 
     worker = new TaskWorker({
-      taskRepository,
+      taskStore: taskRepository,
       handlers: TEST_HANDLERS,
       maxRetries: 0,
       pollIntervalMs: WORKER_POLL_INTERVAL_MS,

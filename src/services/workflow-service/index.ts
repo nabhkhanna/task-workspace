@@ -1,2 +1,6 @@
-export { WorkflowService } from './WorkflowService';
-export { buildFinalResult, finalizeWorkflow } from './workflowFinalizer';
+export {
+  createWorkflowService,
+  type WorkflowService,
+  type WorkflowServiceDeps,
+} from './WorkflowService';
+export { buildFinalResult, createFinalizeWorkflow } from './workflowFinalizer';

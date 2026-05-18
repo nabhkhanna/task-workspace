@@ -5,7 +5,7 @@ import {
   type WorkflowFinalResult,
   type WorkflowFinalResultTaskEntry,
 } from '../../entities';
-import { repositories } from '../../repositories';
+import type { WorkflowRepository } from '../../repositories';
 
 const FINAL_REPORT_TEXT = 'Aggregated workflow results go here';
 
@@ -37,18 +37,22 @@ function lastErrorOf(task: Task): string | undefined {
   return task.errorHistory[task.errorHistory.length - 1]?.error;
 }
 
-export async function finalizeWorkflow(workflowId: string): Promise<void> {
-  const workflow = await repositories.workflowRepository.findByIdWithTasks(workflowId);
-  if (!workflow) {
-    return;
-  }
-  if (workflow.finalResult !== null) {
-    return;
-  }
-  const status = deriveWorkflowStatus(workflow.tasks);
-  if (status !== 'completed' && status !== 'failed') {
-    return;
-  }
-  workflow.finalResult = buildFinalResult(workflow);
-  await repositories.workflowRepository.save(workflow);
+export function createFinalizeWorkflow(
+  workflowRepository: WorkflowRepository,
+): (workflowId: string) => Promise<void> {
+  return async (workflowId: string): Promise<void> => {
+    const workflow = await workflowRepository.findByIdWithTasks(workflowId);
+    if (!workflow) {
+      return;
+    }
+    if (workflow.finalResult !== null) {
+      return;
+    }
+    const status = deriveWorkflowStatus(workflow.tasks);
+    if (status !== 'completed' && status !== 'failed') {
+      return;
+    }
+    workflow.finalResult = buildFinalResult(workflow);
+    await workflowRepository.save(workflow);
+  };
 }

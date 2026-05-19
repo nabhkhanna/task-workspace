@@ -1,6 +1,8 @@
 {
   "scripts": {
+    "prestart": "npm run migration:run",
     "start": "ts-node src/index.ts",
+    "predev": "npm run migration:run",
     "dev": "nodemon --watch src --ext ts --exec ts-node src/index.ts",
     "prepare": "husky",
     "lint": "biome lint",

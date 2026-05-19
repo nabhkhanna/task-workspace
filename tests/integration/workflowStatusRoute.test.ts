@@ -12,6 +12,7 @@ import {
   createAnalysisRoutes,
   createWorkflowRoutes,
   healthRoute,
+  homeRoute,
 } from '../../src/routes';
 import { createWorkflowService } from '../../src/services';
 import { createTestDataSource, makeTask, makeWorkflow } from '../_helpers';
@@ -28,6 +29,7 @@ describe('GET /workflow/:id/status', () => {
     workflowRepository = createWorkflowRepository(dataSource);
     const workflowService = createWorkflowService({ workflowRepository, taskRepository });
     app = createApp({
+      homeRoute,
       healthRoute,
       analysisRoutes: createAnalysisRoutes(workflowService),
       workflowRoutes: createWorkflowRoutes(workflowRepository),

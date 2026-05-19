@@ -7,6 +7,7 @@ const HTTP_SERVER_ERROR = 500;
 const HTTP_CLIENT_ERROR = 400;
 
 export interface AppRoutes {
+  homeRoute: Router;
   healthRoute: Router;
   analysisRoutes: Router;
   workflowRoutes: Router;
@@ -54,6 +55,7 @@ export function createApp(routes: AppRoutes): Express {
     }),
   );
   app.use(express.json());
+  app.use('/', routes.homeRoute);
   app.use('/health', routes.healthRoute);
   app.use('/analysis', routes.analysisRoutes);
   app.use('/workflow', routes.workflowRoutes);

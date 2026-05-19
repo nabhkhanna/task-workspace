@@ -4,7 +4,7 @@ import { config } from './config';
 import { AppDataSource } from './data-source';
 import { logger } from './logger';
 import { createTaskRepository, createWorkflowRepository } from './repositories';
-import { createAnalysisRoutes, createWorkflowRoutes, healthRoute } from './routes';
+import { createAnalysisRoutes, createWorkflowRoutes, healthRoute, homeRoute } from './routes';
 import { createFinalizeWorkflow, createWorkflowService } from './services';
 import { TaskWorker } from './workers';
 import { runAnalysis, runNotification, runPolygonArea, runReportGeneration } from './workers/jobs';
@@ -24,6 +24,7 @@ async function main(): Promise<void> {
   const finalizeWorkflow = createFinalizeWorkflow(workflowRepository);
 
   const app = createApp({
+    homeRoute,
     healthRoute,
     analysisRoutes: createAnalysisRoutes(workflowService),
     workflowRoutes: createWorkflowRoutes(workflowRepository),

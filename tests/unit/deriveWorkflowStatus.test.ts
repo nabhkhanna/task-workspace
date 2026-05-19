@@ -7,11 +7,28 @@ describe('deriveWorkflowStatus', () => {
     expect(deriveWorkflowStatus([])).toBe('initial');
   });
 
-  it('reports failed as soon as any task has failed', () => {
+  it('reports in_progress when a failed task coexists with still-queued tasks', () => {
     const tasks = [
       makeTask({ status: 'completed' }),
       makeTask({ status: 'failed' }),
       makeTask({ status: 'queued' }),
+    ];
+    expect(deriveWorkflowStatus(tasks)).toBe('in_progress');
+  });
+
+  it('reports in_progress when a failed task coexists with an in_progress task', () => {
+    const tasks = [
+      makeTask({ status: 'failed' }),
+      makeTask({ status: 'in_progress' }),
+    ];
+    expect(deriveWorkflowStatus(tasks)).toBe('in_progress');
+  });
+
+  it('reports failed once every task is terminal and at least one failed', () => {
+    const tasks = [
+      makeTask({ status: 'completed' }),
+      makeTask({ status: 'failed' }),
+      makeTask({ status: 'completed' }),
     ];
     expect(deriveWorkflowStatus(tasks)).toBe('failed');
   });

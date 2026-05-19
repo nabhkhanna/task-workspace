@@ -1,334 +1,159 @@
-# Backend Coding Challenge
+# Workflow Engine — osapiens Backend Coding Challenge
 
-## Getting Started
+A TypeScript backend that runs YAML-defined workflows of tasks (geo-analysis, polygon area, notification, report generation) against GeoJSON input. Tasks form a DAG: independent steps run in any order, dependent steps wait for their dependencies to reach a terminal state.
 
-1. Fork the Project:
-   ![There is a button on the top right of you codesandbox environment after signing in](public/image.png)
-2. Start Coding
+The original challenge brief is preserved at [`CHALLENGE.md`](./CHALLENGE.md). The production roadmap (multi-worker leases, outbox, Postgres, auth) lives at [`ARCHITECTURE_v2.md`](./ARCHITECTURE_v2.md).
 
-This repository demonstrates a backend architecture that handles asynchronous tasks, workflows, and job execution using TypeScript, Express.js, and TypeORM. The project showcases how to:
+**Stack:** Node 22, TypeScript (strict), Express 4, TypeORM 0.3, SQLite, `@turf/turf`, `js-yaml`, zod, pino, Vitest, Biome.
 
-- Define and manage entities such as `Task` and `Workflow`.
-- Use a `WorkflowFactory` to create workflows from YAML configurations.
-- Implement a `TaskRunner` that executes jobs associated with tasks and manages task and workflow states.
-- Run tasks asynchronously using a background worker.
+> ### A note on "we"
+>
+> "We" throughout this document is me (Nabh) pair-programming with Claude (Anthropic). I authored every commit and made every judgment call — the DAG-over-singular-dependency choice, the schema-vs-data-migration separation, the type-ownership-per-entity rule, what to push back on, what to ship. Claude contributed design exploration, draft code, and test scaffolding, all surfaced as proposals and reshaped through conversation before landing.
 
-## Key Features
+---
 
-1. **Entity Modeling with TypeORM**
+## Quickstart
 
-   - **Task Entity:** Represents an individual unit of work with attributes like `taskType`, `status`, `progress`, and references to a `Workflow`.
-   - **Workflow Entity:** Groups multiple tasks into a defined sequence or steps, allowing complex multi-step processes.
+```bash
+npm install
+npm start                    # runs migrations, then http://localhost:3000
 
-2. **Workflow Creation from YAML**
+# create a workflow
+curl -X POST http://localhost:3000/analysis \
+  -H 'Content-Type: application/json' \
+  -d '{"clientId":"demo","geoJson":{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[10.4,51.1],[10.5,51.1],[10.5,51.2],[10.4,51.2],[10.4,51.1]]]},"properties":{}}}'
 
-   - Use `WorkflowFactory` to load workflow definitions from a YAML file.
-   - Dynamically create workflows and tasks without code changes by updating YAML files.
-
-3. **Asynchronous Task Execution**
-
-   - A background worker (`taskWorker`) continuously polls for `queued` tasks.
-   - The `TaskRunner` runs the appropriate job based on a task’s `taskType`.
-
-4. **Robust Status Management**
-
-   - `TaskRunner` updates the status of tasks (from `queued` to `in_progress`, `completed`, or `failed`).
-   - Workflow status is evaluated after each task completes, ensuring you know when the entire workflow is `completed` or `failed`.
-
-5. **Dependency Injection and Decoupling**
-   - `TaskRunner` takes in only the `Task` and determines the correct job internally.
-   - `TaskRunner` handles task state transitions, leaving the background worker clean and focused on orchestration.
-
-## Project Structure
-
-```
-src
-├─ models/
-│   ├─ world_data.json  # Contains world data for analysis
-│
-├─ models/
-│   ├─ Result.ts        # Defines the Result entity
-│   ├─ Task.ts          # Defines the Task entity
-│   ├─ Workflow.ts      # Defines the Workflow entity
-│
-├─ jobs/
-│   ├─ Job.ts           # Job interface
-│   ├─ JobFactory.ts    # getJobForTaskType function for mapping taskType to a Job
-│   ├─ TaskRunner.ts    # Handles job execution & task/workflow state transitions
-│   ├─ DataAnalysisJob.ts (example)
-│   ├─ EmailNotificationJob.ts (example)
-│
-├─ workflows/
-│   ├─ WorkflowFactory.ts  # Creates workflows & tasks from a YAML definition
-│
-├─ workers/
-│   ├─ taskWorker.ts    # Background worker that fetches queued tasks & runs them
-│
-├─ routes/
-│   ├─ analysisRoutes.ts # POST /analysis endpoint to create workflows
-│
-├─ data-source.ts       # TypeORM DataSource configuration
-└─ index.ts             # Express.js server initialization & starting the worker
+# poll then fetch results
+curl http://localhost:3000/workflow/<id>/status
+curl http://localhost:3000/workflow/<id>/results
 ```
 
-## Getting Started
-
-### Prerequisites
-
-- Node.js (LTS recommended)
-- npm or yarn
-- SQLite or another supported database
-
-### Installation
-
-1. **Clone the repository:**
-
-   ```bash
-   git clone https://github.com/yourusername/backend-coding-challenge.git
-   cd backend-coding-challenge
-   ```
-
-2. **Install dependencies:**
-
-   ```bash
-   npm install
-   ```
-
-3. **Configure TypeORM:**
-
-   - Edit `data-source.ts` to ensure the `entities` array includes `Task` and `Workflow` entities.
-   - Confirm database settings (e.g. SQLite file path).
-
-4. **Create or Update the Workflow YAML:**
-   - Place a YAML file (e.g. `example_workflow.yml`) in a `workflows/` directory.
-   - Define steps, for example:
-     ```yaml
-     name: "example_workflow"
-     steps:
-       - taskType: "analysis"
-         stepNumber: 1
-       - taskType: "notification"
-         stepNumber: 2
-     ```
-
-### Running the Application
-
-1. **Compile TypeScript (optional if using `ts-node`):**
-
-   ```bash
-   npx tsc
-   ```
-
-2. **Start the server:**
-
-   ```bash
-   npm start
-   ```
-
-   If using `ts-node`, this will start the Express.js server and the background worker after database initialization.
-
-3. **Create a Workflow (e.g. via `/analysis`):**
-
-   ```bash
-   curl -X POST http://localhost:3000/analysis \
-   -H "Content-Type: application/json" \
-   -d '{
-    "clientId": "client123",
-    "geoJson": {
-        "type": "Polygon",
-        "coordinates": [
-            [
-                [
-                    -63.624885020050996,
-                    -10.311050368263523
-                ],
-                [
-                    -63.624885020050996,
-                    -10.367865108370523
-                ],
-                [
-                    -63.61278302732815,
-                    -10.367865108370523
-                ],
-                [
-                    -63.61278302732815,
-                    -10.311050368263523
-                ],
-                [
-                    -63.624885020050996,
-                    -10.311050368263523
-                ]
-            ]
-        ]
-    }
-    }'
-   ```
-
-   This will read the configured workflow YAML, create a workflow and tasks, and queue them for processing.
-
-4. **Check Logs:**
-   - The worker picks up tasks from `queued` state.
-   - `TaskRunner` runs the corresponding job (e.g., data analysis, email notification) and updates states.
-   - Once tasks are done, the workflow is marked as `completed`.
-
-### **Coding Challenge Tasks for the Interviewee**
-
-The following tasks must be completed to enhance the backend system:
+`npm test` runs the suite (94 tests). `npm run lint` and `npm run format:fix` use Biome.
 
 ---
 
-### **1. Add a New Job to Calculate Polygon Area**
+## API
 
-**Objective:**  
-Create a new job class to calculate the area of a polygon from the GeoJSON provided in the task.
-
-#### **Steps:**
-
-1. Create a new job file `PolygonAreaJob.ts` in the `src/jobs/` directory.
-2. Implement the `Job` interface in this new class.
-3. Use `@turf/area` to calculate the polygon area from the `geoJson` field in the task.
-4. Save the result in the `output` field of the task.
-
-#### **Requirements:**
-
-- The `output` should include the calculated area in square meters.
-- Ensure that the job handles invalid GeoJSON gracefully and marks the task as failed.
+| Endpoint | Success | Failure |
+|---|---|---|
+| `POST /analysis` | `202 { workflowId, message }` | `400 { message, issues }` (invalid request body) · `500 { message }` (server-side failure during workflow creation: YAML, DB) |
+| `GET /workflow/:id/status` | `200 { workflowId, status, completedTasks, totalTasks }` where `status ∈ {initial, in_progress, completed, failed}` | `404` unknown id · `400` non-UUID id |
+| `GET /workflow/:id/results` | `200 { workflowId, status, finalResult }` where `finalResult = { workflowId, tasks: [{taskId, type, output, error?}], finalReport }` | `404` unknown id · `400` not yet finalized OR non-UUID id |
+| `GET /health` | `200 { status: "ok" }` (DB ping passed) | `503 { status: "unavailable" }` |
 
 ---
 
-### **2. Add a Job to Generate a Report**
+## How it works
 
-**Objective:**  
-Create a new job class to generate a report by aggregating the outputs of multiple tasks in the workflow.
+HTTP routes (Express 4) accept a request, validate it with zod, and hand a `WorkflowService` the parsed input. The service reads `src/workflows/example_workflow.yml`, validates the definition (zod schema + cycle/duplicate/unknown-dep checks), and persists one `Workflow` row plus N `Task` rows wired via a `task_dependencies` join table.
 
-#### **Steps:**
+A background `TaskWorker` (same process, started in `src/index.ts`) polls for the next runnable task — `queued` with backoff elapsed and every dependency in a terminal state — runs the handler, applies the retry/backoff state transition via the pure `applyTaskOutcome`, persists, and invokes `onTaskCompleted` after every terminal save. The composition root wires `finalizeWorkflow` into that callback; the finalizer writes `Workflow.finalResult` exactly once, when every task is terminal.
 
-1. Create a new job file `ReportGenerationJob.ts` in the `src/jobs/` directory.
-2. Implement the `Job` interface in this new class.
-3. Aggregate outputs from all preceding tasks in the workflow into a JSON report. For example:
-   ```json
-   {
-     "workflowId": "<workflow-id>",
-     "tasks": [
-       { "taskId": "<task-1-id>", "type": "polygonArea", "output": "<area>" },
-       {
-         "taskId": "<task-2-id>",
-         "type": "dataAnalysis",
-         "output": "<analysis result>"
-       }
-     ],
-     "finalReport": "Aggregated data and results"
-   }
-   ```
-4. Save the report as the `output` of the `ReportGenerationJob`.
+The example workflow exercises a fan-in DAG:
 
-#### **Requirements:**
+```yaml
+- taskType: "analysis"
+- taskType: "polygon_area"
+- taskType: "report_generation"
+  dependsOn: ["analysis", "polygon_area"]
+- taskType: "notification"
+  dependsOn: ["report_generation"]
+```
 
-- Ensure the job runs only after all preceding tasks are complete.
-- Handle cases where tasks fail, and include error information in the report.
+`analysis` and `polygon_area` are independent. `report_generation` waits for both. `notification` waits for the report.
+
+### Entities
+
+- **`Workflow`** — `clientId`, `geoJson`, `finalResult` (nullable structured aggregate). Status is **derived**, not stored.
+- **`Task`** — `type`, `status`, `output` (discriminated union per type), `attemptCount`, `nextAttemptAt`, `errorHistory`, `workflow` (ManyToOne), `dependencies` (ManyToMany self-relation via `task_dependencies`).
+- **`AbstractBaseEntity`** — `id` (uuid), `createdAt`, `updatedAt`. Both entities extend.
 
 ---
 
-### **3. Support Interdependent Tasks in Workflows**
+## Design decisions
 
-**Objective:**  
-Modify the system to support workflows with tasks that depend on the outputs of earlier tasks.
+Eight calls worth explaining. Most are deviations from the brief's literal wording; each is documented so a reviewer can see the reasoning.
 
-#### **Steps:**
+### Jobs are functions, not classes
 
-1. Update the `Task` entity to include a `dependency` field that references another task
-2. Modify the `TaskRunner` to wait for dependent tasks to complete and pass their outputs as inputs to the current task.
-3. Extend the workflow YAML format to specify task dependencies (e.g., `dependsOn`).
-4. Update the `WorkflowFactory` to parse dependencies and create tasks accordingly.
+The brief asks for a `Job` interface implemented per class. With four jobs and no shared lifecycle, a class hierarchy is ceremony. The contract is `type JobFn = (task: Task) => Promise<TaskOutput>` and lives in `src/workers/jobs/`. Same idea, less indirection.
 
-#### **Requirements:**
+### `Result` is merged into `Task.output`; `Workflow.status` is derived
 
-- Ensure dependent tasks do not execute until their dependencies are completed.
-- Test workflows where tasks are chained through dependencies.
+The brief implies separate `Result` and `WorkflowStatus` columns. We made `Task.output` a `simple-json` column holding a discriminated union by task type, and derive workflow status from task statuses via `deriveWorkflowStatus(tasks)`. Single source of truth in both cases. Eliminates a whole class of "status column says completed but tasks say in_progress" reconciliation bugs.
 
----
+### Dependencies are many-to-many, not a single field; `stepNumber` removed
 
-### **4. Ensure Final Workflow Results Are Properly Saved**
+The brief says "a `dependency` field that references another task" (singular). `report_generation` legitimately depends on BOTH `analysis` AND `polygon_area`, which a singular dependency can't express. Implemented as a `Task[]` self-relation with a `task_dependencies` join table. `stepNumber` was dropped in the same migration — once `dependsOn` is the source of truth, a second ordering system can only disagree. FIFO `createdAt` is the tiebreaker among ready tasks.
 
-**Objective:**  
-Save the aggregated results of all tasks in the workflow as the `finalResult` field of the `Workflow` entity.
+### `failed` is terminal for dependency purposes
 
-#### **Steps:**
+A dependent task runs even if its dependency failed; it can inspect `dependency.output` (null) and `dependency.errorHistory`. So `report_generation` still produces a report — including the failure information — when `polygon_area` failed. This matches the brief's task #2 requirement to "include error information in the report." In production I would propagate failure as an explicit `skipped` state on dependents (see ARCHITECTURE_v2).
 
-1. Modify the `Workflow` entity to include a `finalResult` field:
-2. Aggregate the outputs of all tasks in the workflow after the last task completes.
-3. Save the aggregated results in the `finalResult` field.
+### Workflow finalization waits for *every* task to be terminal
 
-#### **Requirements:**
+Earlier `deriveWorkflowStatus` returned `failed` the moment any task failed. That signal then locked in `finalResult` with `output: null` for siblings still running, with the `finalResult !== null` short-circuit blocking any later correction. The fix tightens the status derivation to require every task in a terminal state before returning a terminal status. `GET /status` reports `in_progress` while a failed task coexists with non-terminal siblings; counters keep progress visible.
 
-- The `finalResult` must include outputs from all completed tasks.
-- Handle cases where tasks fail, and include failure information in the final result.
+### Invalid GeoJSON is rejected at the HTTP boundary, not at the worker
 
----
+Structurally malformed geoJson (missing geometry, wrong type, non-Feature) is rejected by zod in `analysisRoutes.ts` and the request returns 400 with the zod issues. No workflow row is created — bad input is workflow garbage, not a "task that failed." Structurally valid but geometrically degenerate input passes the boundary; if `@turf/area` throws, the worker's retry/backoff path marks the task `failed` with the error in `errorHistory`, which is the DB-level audit trail the brief implies.
 
-### **5. Create an Endpoint for Getting Workflow Status**
+### `/results` gates on `finalResult !== null`, not on derived status
 
-**Objective:**  
-Implement an API endpoint to retrieve the current status of a workflow.
+The brief says "400 if the workflow is not yet completed." We interpret "completed" via the data: `finalResult` is the signal the finalizer uses to mark "aggregate results available." Gating on the column directly means failed workflows return 200 (their finalResult includes failure info — useful to clients), and a terminal-but-not-yet-finalized workflow honestly returns 400 instead of returning `finalResult: null`.
 
-#### **Endpoint Specification:**
+### Schema migrations and data migrations are strictly separated
 
-- **URL:** `/workflow/:id/status`
-- **Method:** `GET`
-- **Response Example:**
-  ```json
-  {
-    "workflowId": "3433c76d-f226-4c91-afb5-7dfc7accab24",
-    "status": "in_progress",
-    "completedTasks": 3,
-    "totalTasks": 5
-  }
-  ```
+**Why use migrations at all on a greenfield take-home?** Even greenfield code lands somewhere shared — CI, a teammate's laptop, eventually production. The moment that "somewhere" exists, schema changes need to be reproducible and ordered, and `synchronize: true` becomes a footgun (works for one dev, breaks the moment two engineers touch entities in parallel or the DB has data anyone cares about). Migrations are the contract; the CI drift check (`.github/workflows/ci.yml`) enforces it on every PR.
 
-#### **Requirements:**
+**On the "table rebuild" pattern:** several SQLite migrations look destructive because SQLite doesn't support `ALTER TABLE DROP COLUMN`. TypeORM's emitted pattern — create temp table, copy rows, drop, rename — is the standard SQLite workaround. Postgres would emit plain `ALTER`.
 
-- Include the number of completed tasks and the total number of tasks in the workflow.
-- Return a `404` response if the workflow ID does not exist.
+**Why include a data-migration backfill script when there's no production data?** To demonstrate the pattern. Schema migrations live in `migrations/` (idempotent, run on every deploy). Data migrations live in `scripts/migrations/<date>-<name>.ts` (one-shot, interactive via `npm run script:migrate-db`). The included backfill is **time-bounded** (only touches rows created before its schema migration) and **inlines its aggregation logic** rather than importing from `src/services/` — so a future change to `buildFinalResult` won't silently mutate what the backfill produces. The script is frozen at authorship time.
 
 ---
 
-### **6. Create an Endpoint for Retrieving Workflow Results**
+## Environment
 
-**Objective:**  
-Implement an API endpoint to retrieve the final results of a completed workflow.
+Parsed once at boot in `src/config/index.ts` via zod. `process.env` is forbidden elsewhere (Biome).
 
-#### **Endpoint Specification:**
-
-- **URL:** `/workflow/:id/results`
-- **Method:** `GET`
-- **Response Example:**
-  ```json
-  {
-    "workflowId": "3433c76d-f226-4c91-afb5-7dfc7accab24",
-    "status": "completed",
-    "finalResult": "Aggregated workflow results go here"
-  }
-  ```
-
-#### **Requirements:**
-
-- Return the `finalResult` field of the workflow if it is completed.
-- Return a `404` response if the workflow ID does not exist.
-- Return a `400` response if the workflow is not yet completed.
+| Variable | Default | Description |
+|---|---|---|
+| `NODE_ENV` | `development` | `development` · `production` · `test` |
+| `PORT` | `3000` | HTTP listen port |
+| `LOG_LEVEL` | `info` | `trace` · `debug` · `info` · `warn` · `error` · `fatal` |
+| `DB_PATH` | `data/database.sqlite` | SQLite file path |
+| `SHUTDOWN_TIMEOUT_MS` | `30000` | Hard timeout for graceful shutdown |
+| `MAX_TASK_RETRIES` | `3` | Total attempts permitted per task = `MAX_TASK_RETRIES + 1` |
 
 ---
 
-### **Deliverables**
+## Testing
 
-- **Code Implementation:**
+```bash
+npm test              # 94 tests
+npm run test:coverage # vitest with v8 coverage
+```
 
-  - New jobs: `PolygonAreaJob` and `ReportGenerationJob`.
-  - Enhanced workflow support for interdependent tasks.
-  - Workflow final results aggregation.
-  - New API endpoints for workflow status and results.
+- `tests/unit/` — pure logic (retry/backoff state machine, report builder, finalResult builder, workflow status derivation, cycle detection, job logic). No DB, no fakes.
+- `tests/integration/` — real in-memory SQLite, real repositories, real worker loop. Routes are exercised through `supertest`.
 
-- **Documentation:**
-  - Update the README file to include instructions for testing the new features.
-  - Document the API endpoints with request and response examples.
+No domain entity is mocked anywhere. A small number of integration tests inject test handlers in place of real job functions to isolate worker-loop concerns from the jobs' geo logic.
 
 ---
+
+## v1 boundaries and v2 roadmap
+
+Items outside v1's scope, with the v2 design in [`ARCHITECTURE_v2.md`](./ARCHITECTURE_v2.md):
+
+- **Authentication** — the API is currently unauthenticated; multi-tenant JWT with `clientId`-scoped lookups is the v2 design.
+- **Multi-worker** — v1 runs a single worker. v2 adds lease columns (`claimedBy`, `claimedUntil`) and atomic pickup via `FOR UPDATE SKIP LOCKED`.
+- **Central error-handler middleware** — v1 uses per-handler try/catch. v2 routes throw and a single middleware translates `ZodError → 400`, domain errors to typed responses, and attaches a request ID.
+- **Postgres** — for the concurrency primitives (`FOR UPDATE SKIP LOCKED`, advisory locks) the multi-worker design depends on, and indexable `jsonb` for payload queries.
+- **Idempotency-Key header on `POST /analysis`** — for at-least-once HTTP retry semantics.
+- **DLQ rescue endpoint** — list and re-queue tasks whose retries are exhausted.
+
+---
+
+## Repo conventions
+
+Conventional Commits. One branch per logical change. CI must pass before merge. Biome enforces format and lint, including the no-`process.env`-outside-config rule. Pre-commit hook runs `lint-staged`.

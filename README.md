@@ -9,6 +9,8 @@ The original challenge brief is preserved at [`CHALLENGE.md`](./CHALLENGE.md). T
 > ### A note on "we"
 >
 > "We" throughout this document is me (Nabh) pair-programming with Claude (Anthropic). I authored every commit and made every judgment call — the DAG-over-singular-dependency choice, the schema-vs-data-migration separation, the type-ownership-per-entity rule, what to push back on, what to ship. Claude contributed design exploration, draft code, and test scaffolding, all surfaced as proposals and reshaped through conversation before landing.
+>
+> Three artifacts make that structure visible. [`CLAUDE.md`](./CLAUDE.md) is the entry-point context the agent reads before touching any file in this repo. [`.claude/skills/principal-developer/`](./.claude/skills/principal-developer/) holds the engineering principles I apply across projects — errors as data, YAGNI, the testing pyramid + Logic Sandwich, ports & adapters, evolutionary architecture, harness engineering for AI-assisted development, OTel-flavoured observability. [`docs/PHASES.md`](./docs/PHASES.md) is the strategic phased plan behind the PR-by-PR narrative in `git log`.
 
 ---
 

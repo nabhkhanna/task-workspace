@@ -332,3 +332,27 @@ Implement an API endpoint to retrieve the final results of a completed workflow.
   - Document the API endpoints with request and response examples.
 
 ---
+
+## Known Limitations / Would Revisit
+
+The items below are deliberate scope choices rather than unknowns. They are documented here because a production deployment would address each one differently — calling them out explicitly so a reviewer can distinguish "didn't notice" from "noticed and scoped out."
+
+### 1. Dependents run on failed dependencies
+
+`TaskRepository.findNextRunnable` treats both `completed` and `failed` as satisfying a dependency, so a downstream task (e.g. `report_generation`) still runs when its upstream dependency failed. The current behavior is a form of graceful degradation: the report aggregates whatever outputs and errors are available, and the eventual `finalResult` still carries the failure information for the dependent's input.
+
+For a production system I would model this as an explicit `skipped` state, propagated from a failed dependency to its dependents at scheduling time, and surface it in `finalResult` rather than silently running the dependent on partial inputs. That makes the "this output is missing because its upstream failed" case legible to API consumers instead of inferring it from `output: null`.
+
+### 2. `report_generation` aggregates all terminal siblings, not its declared dependencies
+
+`runReportGeneration` walks every sibling task in the workflow rather than the task's own `dependencies` array. For the included `example_workflow.yml` this is equivalent — one report node summarizes the whole workflow. A wider DAG with two report nodes, or with unrelated parallel branches that share a workflow, would produce an over-broad summary.
+
+The fix is to walk `task.dependencies` instead of the sibling list. Left scoped here because the example workflow does not exercise the broader shape, and the change would otherwise extend without test coverage for the new behavior.
+
+### 3. Single-worker assumption / non-atomic task pickup
+
+The polling worker uses a plain `SELECT ... WHERE status = 'queued'` followed by an in-process readiness filter, then flips the status to `in_progress` in a separate write inside `TaskWorker.processNext`. Running two workers against the same database would race: both could hydrate the same row and execute the handler twice. The current bootstrap only spawns one worker per process, so this is latent.
+
+For a production system I would either make the claim atomic (`UPDATE tasks SET status = 'in_progress' WHERE id = ? AND status = 'queued'`, gated on affected-row count), or add lease columns (`ownerId`, `lockedUntil`) with a periodic stale-lock sweeper to recover after a crashed worker. The current `requeueInterrupted` boot step covers crashes between process restarts but not concurrent workers.
+
+---

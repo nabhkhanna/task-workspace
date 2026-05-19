@@ -1,0 +1,22 @@
+{
+    "setupTasks": [
+        {
+            "name": "Install dependencies",
+            "command": "npm install"
+        }
+    ],
+    "tasks": {
+        "start": {
+            "name": "Start server",
+            "command": "npm start",
+            "runAtStart": true,
+            "preview": {
+                "port": 3000
+            }
+        },
+        "test": {
+            "name": "Run tests",
+            "command": "npm test"
+        }
+    }
+}
